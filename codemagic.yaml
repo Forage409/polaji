@@ -16,6 +16,7 @@ workflows:
       - name: Build unsigned iPhone app
         script: |
           set -euo pipefail
+          xcrun actool --compile build/DerivedData/actool_out --minimum-deployment-target 16.0 --platform iphoneos Assets.xcassets || true
           xcodebuild build \
             -project ZhengHuoJu.xcodeproj \
             -scheme ZhengHuoJu \
@@ -54,6 +55,7 @@ workflows:
       - name: Compile for iOS simulator
         script: |
           set -euo pipefail
+          xcrun actool --compile build/DerivedData/actool_out --minimum-deployment-target 16.0 --platform iphoneos Assets.xcassets || true
           xcodebuild build \
             -project ZhengHuoJu.xcodeproj \
             -scheme ZhengHuoJu \
@@ -62,3 +64,4 @@ workflows:
             -derivedDataPath build/DerivedData
     artifacts:
       - build/DerivedData/Build/Products/Debug-iphonesimulator/ZhengHuoJu.app
+
