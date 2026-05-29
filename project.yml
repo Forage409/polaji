@@ -16,8 +16,6 @@ targets:
           - "scratch"
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.zhenghuoju.app
-      ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-      ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
       GENERATE_INFOPLIST_FILE: YES
       INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription: "用于将生成的整活卡片保存到相册。"
       INFOPLIST_KEY_UILaunchScreen_Generation: YES
