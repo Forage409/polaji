@@ -18,9 +18,8 @@ targets:
       PRODUCT_BUNDLE_IDENTIFIER: com.zhenghuoju.app
       GENERATE_INFOPLIST_FILE: YES
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-      INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription: "用于将生成的整活卡片保存到相册�?
+      INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription: "用于将生成的整活卡片保存到相册。"
       INFOPLIST_KEY_UILaunchScreen_Generation: YES
       INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
       MARKETING_VERSION: "1.0.0"
       CURRENT_PROJECT_VERSION: "1"
-
