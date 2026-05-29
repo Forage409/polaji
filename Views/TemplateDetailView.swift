@@ -1,4 +1,4 @@
-﻿import SwiftUI
+import SwiftUI
 
 struct TemplateDetailView: View {
     let template: Template
@@ -61,7 +61,7 @@ struct TemplateDetailView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 12)
-                .padding(.bottom, UIApplication.shared.windows.first?.safeAreaInsets.bottom ?? 20)
+                .padding(.bottom, 30) // Fixed safeAreaInsets deprecation
             }
             .background(Color.white)
             .shadow(color: .black.opacity(0.05), radius: 10, x: 0, y: -5)

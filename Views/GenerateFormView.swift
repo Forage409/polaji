@@ -1,4 +1,4 @@
-﻿import SwiftUI
+import SwiftUI
 
 struct GenerateFormView: View {
     let template: Template
@@ -42,7 +42,7 @@ struct GenerateFormView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 12)
-                .padding(.bottom, UIApplication.shared.windows.first?.safeAreaInsets.bottom ?? 20)
+                .padding(.bottom, 30) // Fixed safeAreaInsets deprecation
             }
             .background(Color.themeBackground)
         }

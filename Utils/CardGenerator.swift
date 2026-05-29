@@ -1,4 +1,4 @@
-﻿import Foundation
+import Foundation
 
 class CardGenerator {
     static let shared = CardGenerator()
@@ -17,7 +17,7 @@ class CardGenerator {
         switch templateId {
         case "office_survival":
             title = "办公室生存大师"
-            subtitle = "在工位上如老狗，在内心里自由冲浪"
+            subtitle = "\(nickname)在工位上如老狗"
             imageName = "icon_persona"
             stats = [
                 StatItem(name: "生存能力", value: Int.random(in: 60...99)),
@@ -52,7 +52,7 @@ class CardGenerator {
             
         case "truth_dare":
             title = "真心话大冒险"
-            subtitle = "勇者的试炼"
+            subtitle = "\(nickname)的试炼"
             imageName = "icon_truth_dare"
             stats = [
                 StatItem(name: "心跳指数", value: Int.random(in: 80...100)),
@@ -62,7 +62,7 @@ class CardGenerator {
             
         case "rich_card":
             title = "隐藏富豪鉴定卡"
-            subtitle = "经鉴定：绝对是有钱人"
+            subtitle = "经鉴定：\(nickname)是有钱人"
             imageName = "tpl_rich"
             stats = [
                 StatItem(name: "财富隐藏度", value: Int.random(in: 80...100)),
@@ -72,7 +72,7 @@ class CardGenerator {
             
         case "stay_up":
             title = "熬夜冠军证书"
-            subtitle = "月亮不睡我不睡"
+            subtitle = "\(nickname)修仙党必备"
             imageName = "tpl_stay_up"
             stats = [
                 StatItem(name: "黑眼圈深度", value: Int.random(in: 85...100)),
@@ -82,7 +82,7 @@ class CardGenerator {
             
         case "single_card":
             title = "寡王鉴定书"
-            subtitle = "单身不仅靠实力，还靠运气"
+            subtitle = "\(nickname)不仅靠实力，还靠运气"
             imageName = "tpl_single_transparent"
             stats = [
                 StatItem(name: "孤单指数", value: Int.random(in: 80...100)),
@@ -92,7 +92,7 @@ class CardGenerator {
             
         case "boss_card":
             title = "天生老板命"
-            subtitle = "气质这块拿捏得死死的"
+            subtitle = "\(nickname)气质拿捏得死死的"
             imageName = "tpl_boss_transparent"
             stats = [
                 StatItem(name: "画大饼能力", value: Int.random(in: 80...100)),
@@ -103,7 +103,7 @@ class CardGenerator {
         case "persona_card":
             let mood = inputs["mood"] ?? "平静"
             title = "今日状态档案"
-            subtitle = "心情：\(mood)"
+            subtitle = "\(nickname)心情：\(mood)"
             imageName = "icon_persona"
             stats = [
                 StatItem(name: "精神力", value: Int.random(in: 10...90)),
@@ -113,7 +113,7 @@ class CardGenerator {
             
         default:
             title = "整活局通用卡片"
-            subtitle = "你的专属定制"
+            subtitle = "\(nickname)的专属定制"
             imageName = "logo"
             stats = [
                 StatItem(name: "欢乐指数", value: Int.random(in: 80...100))
