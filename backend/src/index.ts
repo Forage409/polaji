@@ -212,7 +212,25 @@ export default {
             }
             
             if (path === "/api/upload" && method === "POST") {
-                return new Response("https://r2.zhenghuoju.com/mock-upload-url", { headers: corsHeaders });
+                const contentType = request.headers.get("Content-Type") || "image/jpeg";
+                const imageData = await request.arrayBuffer();
+
+                // Generate unique filename
+                const timestamp = Date.now();
+                const randomStr = Math.random().toString(36).substring(2, 15);
+                const ext = contentType.includes("png") ? "png" : "jpg";
+                const filename = `works/${timestamp}-${randomStr}.${ext}`;
+
+                // Upload to R2
+                await env.BUCKET.put(filename, imageData, {
+                    httpMetadata: {
+                        contentType: contentType
+                    }
+                });
+
+                // Return public URL (adjust domain as needed)
+                const publicUrl = `https://r2.zhenghuoju.com/${filename}`;
+                return new Response(publicUrl, { headers: corsHeaders });
             }
             
             return Response.json({ error: "Not found" }, { status: 404, headers: corsHeaders });
