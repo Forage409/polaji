@@ -11,8 +11,10 @@ struct EditorFormRulesView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal)
                 
-                ForEach(draft.formFields.indices, id: \.self) { index in
-                    formFieldRow(index: index)
+                ForEach($draft.formFields) { $field in
+                    if let index = draft.formFields.firstIndex(where: { $0.id == field.id }) {
+                        formFieldRow(index: index)
+                    }
                 }
                 
                 Button(action: {

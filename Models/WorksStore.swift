@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 
 class WorksStore: ObservableObject {
     static let shared = WorksStore()

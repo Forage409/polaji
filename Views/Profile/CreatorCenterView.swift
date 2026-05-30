@@ -25,7 +25,7 @@ struct CreatorCenterView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("创作者中心")
                             .font(.system(size: 20, weight: .bold))
-                        Text(UserProfileStore.shared.profile.nickname)
+                        Text(UserProfileStore.shared.nickname)
                             .font(.system(size: 14))
                             .foregroundColor(.themeTextSecondary)
                     }
