@@ -63,25 +63,33 @@ struct TemplatesWaterfallView: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 120)
         }
+        }
         .onAppear {
-            RemoteTemplateService.shared.fetchTemplates { fetched in
-                if let fetched = fetched, !fetched.isEmpty {
-                    self.templates = fetched.map { rt in
-                        Template(
-                            id: rt.id,
-                            name: rt.title,
-                            category: rt.category,
-                            description: rt.description,
-                            coverImage: rt.coverImage,
-                            isVip: false,
-                            usageCount: rt.usageCount,
-                            tags: [],
-                            fields: []
-                        )
-                    }
-                } else {
-                    self.templates = MockData.allTemplates
+            loadData()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshFeed"))) { _ in
+            loadData()
+        }
+    }
+    
+    private func loadData() {
+        RemoteTemplateService.shared.fetchTemplates { fetched in
+            if let fetched = fetched, !fetched.isEmpty {
+                self.templates = fetched.map { rt in
+                    Template(
+                        id: rt.id,
+                        name: rt.title,
+                        category: rt.category,
+                        description: rt.description,
+                        coverImage: rt.coverImage,
+                        isVip: false,
+                        usageCount: rt.usageCount,
+                        tags: [],
+                        fields: []
+                    )
                 }
+            } else {
+                self.templates = MockData.allTemplates
             }
         }
     }
@@ -134,9 +142,6 @@ struct TemplateWaterfallCard: View {
     }
     
     private func formatCount(_ count: Int) -> String {
-        if count >= 10000 {
-            return String(format: "%.1fw", Double(count) / 10000.0)
-        }
         return "\(count)"
     }
 }

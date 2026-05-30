@@ -57,13 +57,13 @@ struct TemplateDetailView: View {
                             .foregroundColor(.themeTextSecondary)
                             .lineSpacing(6)
                         
-                        // Fake rich content block to show a preview image or extra details
+                        // WeChat moments style preview
                         if template.category != "未知" {
                             Image.bundle(template.coverImage)
                                 .resizable()
                                 .scaledToFill()
-                                .frame(height: 180)
-                                .clipShape(RoundedRectangle(cornerRadius: 16))
+                                .frame(width: 140, height: 140)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
                                 .padding(.top, 8)
                         }
                     }

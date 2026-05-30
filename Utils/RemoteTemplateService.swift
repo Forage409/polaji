@@ -12,58 +12,99 @@ class RemoteTemplateService {
     private init() {}
     
     func fetchTemplates(completion: @escaping ([RemoteTemplate]?) -> Void) {
-        // Mock implementation for now
-        DispatchQueue.global().asyncAfter(deadline: .now() + 1.0) {
-            DispatchQueue.main.async {
-                completion(nil) // Return nil to fallback to local mock data for now
-            }
+        guard let url = URL(string: "\(baseURL)/api/templates") else {
+            completion(nil)
+            return
         }
+        URLSession.shared.dataTask(with: url) { data, _, error in
+            if let data = data, error == nil {
+                let templates = try? JSONDecoder().decode([RemoteTemplate].self, from: data)
+                DispatchQueue.main.async { completion(templates) }
+            } else {
+                DispatchQueue.main.async { completion(nil) }
+            }
+        }.resume()
     }
     
     func fetchTemplateDetail(id: String, completion: @escaping (RemoteTemplate?) -> Void) {
-        DispatchQueue.global().asyncAfter(deadline: .now() + 1.0) {
-            DispatchQueue.main.async {
-                completion(nil)
-            }
+        guard let url = URL(string: "\(baseURL)/api/templates/\(id)") else {
+            completion(nil)
+            return
         }
+        URLSession.shared.dataTask(with: url) { data, _, error in
+            if let data = data, error == nil {
+                let template = try? JSONDecoder().decode(RemoteTemplate.self, from: data)
+                DispatchQueue.main.async { completion(template) }
+            } else {
+                DispatchQueue.main.async { completion(nil) }
+            }
+        }.resume()
     }
     
     func fetchFeaturedTemplates(completion: @escaping ([RemoteTemplate]?) -> Void) {
-        DispatchQueue.global().asyncAfter(deadline: .now() + 0.5) {
-            DispatchQueue.main.async {
-                completion(nil)
-            }
+        guard let url = URL(string: "\(baseURL)/api/templates/featured") else {
+            completion(nil)
+            return
         }
+        URLSession.shared.dataTask(with: url) { data, _, error in
+            if let data = data, error == nil {
+                let templates = try? JSONDecoder().decode([RemoteTemplate].self, from: data)
+                DispatchQueue.main.async { completion(templates) }
+            } else {
+                DispatchQueue.main.async { completion(nil) }
+            }
+        }.resume()
     }
     
     func fetchTrendingTemplates(completion: @escaping ([RemoteTemplate]?) -> Void) {
-        DispatchQueue.global().asyncAfter(deadline: .now() + 0.5) {
-            DispatchQueue.main.async {
-                completion(nil)
-            }
+        guard let url = URL(string: "\(baseURL)/api/templates/trending") else {
+            completion(nil)
+            return
         }
+        URLSession.shared.dataTask(with: url) { data, _, error in
+            if let data = data, error == nil {
+                let templates = try? JSONDecoder().decode([RemoteTemplate].self, from: data)
+                DispatchQueue.main.async { completion(templates) }
+            } else {
+                DispatchQueue.main.async { completion(nil) }
+            }
+        }.resume()
     }
     
     func createTemplate(draft: RemoteTemplate, completion: @escaping (Bool) -> Void) {
-        // POST /api/templates
-        DispatchQueue.global().asyncAfter(deadline: .now() + 1.0) {
-            DispatchQueue.main.async {
-                completion(true)
-            }
+        guard let url = URL(string: "\(baseURL)/api/templates") else {
+            completion(false)
+            return
         }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONEncoder().encode(draft)
+        
+        URLSession.shared.dataTask(with: request) { _, response, error in
+            let success = error == nil && (response as? HTTPURLResponse)?.statusCode == 200
+            DispatchQueue.main.async { completion(success) }
+        }.resume()
     }
     
     func updateTemplate(template: RemoteTemplate, completion: @escaping (Bool) -> Void) {
-        // PUT /api/templates/:id
-        DispatchQueue.global().asyncAfter(deadline: .now() + 1.0) {
-            DispatchQueue.main.async {
-                completion(true)
-            }
+        guard let url = URL(string: "\(baseURL)/api/templates/\(template.id)") else {
+            completion(false)
+            return
         }
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONEncoder().encode(template)
+        
+        URLSession.shared.dataTask(with: request) { _, response, error in
+            let success = error == nil && (response as? HTTPURLResponse)?.statusCode == 200
+            DispatchQueue.main.async { completion(success) }
+        }.resume()
     }
     
     func uploadCover(imageData: Data, completion: @escaping (String?) -> Void) {
-        // Get pre-signed URL from Worker, then PUT to R2
+        // Fallback mock for cover upload to prevent full blockage if R2 is not ready
         DispatchQueue.global().asyncAfter(deadline: .now() + 1.5) {
             DispatchQueue.main.async {
                 completion("https://r2.zhenghuoju.com/mock_cover_\(UUID().uuidString).jpg")
@@ -72,17 +113,34 @@ class RemoteTemplateService {
     }
     
     func publishTemplate(id: String, completion: @escaping (Bool) -> Void) {
-        // POST /api/templates/:id/publish
-        DispatchQueue.global().asyncAfter(deadline: .now() + 0.5) {
-            DispatchQueue.main.async {
-                completion(true)
-            }
+        guard let url = URL(string: "\(baseURL)/api/templates/\(id)/publish") else {
+            completion(false)
+            return
         }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        
+        URLSession.shared.dataTask(with: request) { _, response, error in
+            let success = error == nil && (response as? HTTPURLResponse)?.statusCode == 200
+            DispatchQueue.main.async { completion(success) }
+        }.resume()
     }
     
     func sendTemplateEvent(templateId: String, eventType: String) {
-        // Events: template_view, template_start, template_generate, template_share, template_like
-        // POST /api/templates/:id/events
-        print("RemoteTemplateService: Sent event '\(eventType)' for template '\(templateId)'")
+        guard let url = URL(string: "\(baseURL)/api/templates/\(templateId)/events") else { return }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let payload = ["eventType": eventType]
+        request.httpBody = try? JSONSerialization.data(withJSONObject: payload)
+        
+        URLSession.shared.dataTask(with: request) { _, _, error in
+            if let error = error {
+                print("Failed to send event \(eventType): \(error.localizedDescription)")
+            } else {
+                print("RemoteTemplateService: Sent event '\(eventType)' for template '\(templateId)'")
+            }
+        }.resume()
     }
 }
+

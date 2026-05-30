@@ -197,6 +197,10 @@ struct ProfileView: View {
     
     private var menuList: some View {
         VStack(spacing: 0) {
+            menuRow(icon: "sparkles.rectangle.stack.fill", color: Color.themePrimary, title: "创作者中心", subtitle: "管理我的玩法，查看数据漏斗") {
+                CreatorCenterView()
+            }
+            divider()
             menuRow(icon: "doc.text.fill", color: Color(hex: "FFB300"), title: "我的订单", subtitle: "查看会员订单与支付记录") {
                 MyOrdersView()
             }
