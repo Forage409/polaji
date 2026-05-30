@@ -13,7 +13,7 @@ struct EditorFormRulesView: View {
                 
                 ForEach($draft.formFields) { $field in
                     if let index = draft.formFields.firstIndex(where: { $0.id == field.id }) {
-                        formFieldRow(index: index)
+                        formFieldRow(field: $field, index: index)
                     }
                 }
                 
@@ -44,13 +44,17 @@ struct EditorFormRulesView: View {
     }
     
     @ViewBuilder
-    private func formFieldRow(index: Int) -> some View {
+    private func formFieldRow(field: Binding<FormFieldDraft>, index: Int) -> some View {
         VStack(spacing: 12) {
             HStack {
                 Text("字段 \(index + 1)")
                     .font(.system(size: 14, weight: .bold))
                 Spacer()
-                Button(action: { draft.formFields.remove(at: index) }) {
+                Button(action: { 
+                    if let idx = draft.formFields.firstIndex(where: { $0.id == field.wrappedValue.id }) {
+                        draft.formFields.remove(at: idx) 
+                    }
+                }) {
                     Image(systemName: "trash")
                         .foregroundColor(.red)
                 }
@@ -60,7 +64,7 @@ struct EditorFormRulesView: View {
                 Text("标题")
                     .font(.system(size: 14))
                     .frame(width: 60, alignment: .leading)
-                TextField("如：被整人昵称", text: $draft.formFields[index].label)
+                TextField("如：被整人昵称", text: field.label)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
             }
             
@@ -68,7 +72,7 @@ struct EditorFormRulesView: View {
                 Text("类型")
                     .font(.system(size: 14))
                     .frame(width: 60, alignment: .leading)
-                Picker("", selection: $draft.formFields[index].type) {
+                Picker("", selection: field.type) {
                     Text("单行文本").tag("text")
                     Text("单选").tag("single_select")
                     Text("多选").tag("multi_select")

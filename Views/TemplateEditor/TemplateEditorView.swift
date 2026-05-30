@@ -99,17 +99,7 @@ struct TemplateEditorView: View {
                         .cornerRadius(25)
                 }
             } else {
-                Button(action: {
-                    // Publish Action handled in step 5
-                }) {
-                    Text("发布玩法")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(.themeTextMain)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(Color.themePrimary)
-                        .cornerRadius(25)
-                }
+                Spacer() // Only show '上一步' when at step 5, '发布' is in the view itself
             }
         }
         .padding()

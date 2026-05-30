@@ -2,7 +2,7 @@ import SwiftUI
 
 struct EditorPreviewPublishView: View {
     @ObservedObject var draft: TemplateDraft
-    @Environment(\.presentationMode) var presentationMode
+    @Environment(\.dismiss) var dismiss
     @State private var isPublishing = false
     @State private var showAlert = false
     @State private var alertMsg = ""
@@ -104,6 +104,10 @@ struct EditorPreviewPublishView: View {
             return
         }
         
+        let capturedTitle = self.draft.title
+        let capturedDescription = self.draft.description
+        let capturedCategory = self.draft.category
+        
         Task {
             do {
                 let coverUrl = try await RemoteTemplateService.shared.uploadCover(imageData: imageData)
@@ -111,10 +115,10 @@ struct EditorPreviewPublishView: View {
                 
                 let draftTemplate = RemoteTemplate(
                     id: UUID().uuidString,
-                    title: self.draft.title,
-                    description: self.draft.description,
+                    title: capturedTitle,
+                    description: capturedDescription,
                     coverImage: finalCoverUrl,
-                    category: self.draft.category,
+                    category: capturedCategory,
                     authorId: UserProfileStore.shared.userId,
                     authorName: UserProfileStore.shared.nickname,
                     viewCount: 0,
@@ -139,9 +143,8 @@ struct EditorPreviewPublishView: View {
                         self.alertMsg = "发布成功！"
                         self.showAlert = true
                         NotificationCenter.default.post(name: NSNotification.Name("RefreshFeed"), object: nil)
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                            self.presentationMode.wrappedValue.dismiss()
-                        }
+                        // Trigger dismiss directly in MainActor, instead of DispatchQueue.main.asyncAfter which captures stale environment
+                        self.dismiss()
                     } else {
                         self.alertMsg = "发布失败，请检查网络"
                         self.showAlert = true

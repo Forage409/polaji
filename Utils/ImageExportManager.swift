@@ -92,9 +92,12 @@ class ImageExportManager {
 
 class ImageSaver: NSObject {
     var completion: ((Bool) -> Void)?
+    private static var activeSavers: [ImageSaver] = []
     
     init(completion: @escaping (Bool) -> Void) {
         self.completion = completion
+        super.init()
+        ImageSaver.activeSavers.append(self)
     }
     
     func writeToPhotoAlbum(image: UIImage) {
@@ -106,6 +109,9 @@ class ImageSaver: NSObject {
             completion?(false)
         } else {
             completion?(true)
+        }
+        if let index = ImageSaver.activeSavers.firstIndex(of: self) {
+            ImageSaver.activeSavers.remove(at: index)
         }
     }
 }
