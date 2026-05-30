@@ -1,8 +1,10 @@
 import SwiftUI
 
 struct MainBannerView: View {
+    let template: Template
+    
     var body: some View {
-        NavigationLink(destination: TemplateDetailView(template: MockData.allTemplates.first(where: { $0.id == "persona_card" }) ?? MockData.allTemplates[0])) {
+        NavigationLink(destination: TemplateDetailView(template: template)) {
             ZStack(alignment: .leading) {
                 Image.bundle("banner_bg_decorations")
                     .resizable()

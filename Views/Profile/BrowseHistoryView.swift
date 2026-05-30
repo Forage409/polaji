@@ -11,17 +11,22 @@ struct BrowseHistoryView: View {
             } else {
                 List {
                     ForEach(store.entries) { entry in
-                        if let template = MockData.template(id: entry.templateId) {
-                            NavigationLink(destination: TemplateDetailView(template: template)) {
-                                row(entry: entry)
-                            }
-                            .listRowBackground(Color.themeBackground)
-                            .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                        } else {
+                        let minimalTemplate = Template(
+                            id: entry.templateId,
+                            name: entry.templateName,
+                            category: entry.category,
+                            description: "",
+                            coverImage: entry.coverImage,
+                            isVip: false,
+                            usageCount: 0,
+                            tags: [],
+                            fields: []
+                        )
+                        NavigationLink(destination: TemplateDetailView(template: minimalTemplate)) {
                             row(entry: entry)
-                                .listRowBackground(Color.themeBackground)
-                                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                         }
+                        .listRowBackground(Color.themeBackground)
+                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                     }
                     .onDelete { indexSet in
                         for idx in indexSet {

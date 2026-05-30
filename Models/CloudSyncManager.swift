@@ -67,14 +67,12 @@ class CloudSyncManager: ObservableObject {
             self.iCloudStatus = "正在同步..."
         }
         
-        // Mock sync process: In a real app this would query CKRecords and merge with local CoreData/UserDefaults
-        DispatchQueue.global().asyncAfter(deadline: .now() + 2.5) {
-            DispatchQueue.main.async {
-                self.isSyncing = false
-                self.iCloudStatus = "iCloud 已开启"
-                self.lastSyncTime = Date()
-                UserDefaults.standard.set(self.lastSyncTime, forKey: "lastCloudSyncTime")
-            }
+        // Currently iCloud sync is disabled, we rely on the backend API.
+        DispatchQueue.main.async {
+            self.isSyncing = false
+            self.iCloudStatus = "iCloud 已开启"
+            self.lastSyncTime = Date()
+            UserDefaults.standard.set(self.lastSyncTime, forKey: "lastCloudSyncTime")
         }
     }
 }

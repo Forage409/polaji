@@ -44,6 +44,8 @@ struct DiscoverView: View {
 // MARK: - Templates Waterfall
 struct TemplatesWaterfallView: View {
     @State private var templates: [Template] = []
+    @State private var isLoading = true
+    @State private var hasError = false
     
     let columns = [
         GridItem(.flexible(), spacing: 12),
@@ -51,21 +53,49 @@ struct TemplatesWaterfallView: View {
     ]
     
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            LazyVGrid(columns: columns, spacing: 16) {
-                ForEach(templates) { template in
-                    NavigationLink(destination: TemplateDetailView(template: template)) {
-                        TemplateWaterfallCard(template: template)
+        Group {
+            if isLoading {
+                ProgressView("加载中...")
+                    .padding(.top, 50)
+            } else if hasError {
+                VStack(spacing: 12) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.system(size: 40))
+                        .foregroundColor(.gray)
+                    Text("网络开小差了")
+                        .foregroundColor(.themeTextSecondary)
+                    Button("重试") { loadData() }
+                        .foregroundColor(.themePrimary)
+                }
+                .padding(.top, 80)
+            } else if templates.isEmpty {
+                VStack(spacing: 12) {
+                    Image(systemName: "sparkles.rectangle.stack")
+                        .font(.system(size: 40))
+                        .foregroundColor(.gray)
+                    Text("暂无模板")
+                        .foregroundColor(.themeTextSecondary)
+                }
+                .padding(.top, 80)
+            } else {
+                ScrollView(showsIndicators: false) {
+                    LazyVGrid(columns: columns, spacing: 16) {
+                        ForEach(templates) { template in
+                            NavigationLink(destination: TemplateDetailView(template: template)) {
+                                TemplateWaterfallCard(template: template)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
                     }
-                    .buttonStyle(PlainButtonStyle())
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 120)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 120)
-        }
         }
         .onAppear {
-            loadData()
+            if templates.isEmpty {
+                loadData()
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshFeed"))) { _ in
             loadData()
@@ -73,8 +103,11 @@ struct TemplatesWaterfallView: View {
     }
     
     private func loadData() {
+        isLoading = true
+        hasError = false
         RemoteTemplateService.shared.fetchTemplates { fetched in
-            if let fetched = fetched, !fetched.isEmpty {
+            isLoading = false
+            if let fetched = fetched {
                 self.templates = fetched.map { rt in
                     Template(
                         id: rt.id,
@@ -89,7 +122,7 @@ struct TemplatesWaterfallView: View {
                     )
                 }
             } else {
-                self.templates = MockData.allTemplates
+                hasError = true
             }
         }
     }

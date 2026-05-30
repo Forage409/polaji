@@ -2,17 +2,22 @@ import SwiftUI
 
 struct HomeView: View {
     @StateObject private var store = WorksStore()
+    @State private var hotTemplates: [Template] = []
     
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 24) {
                 HeaderView()
                 
-                MainBannerView()
+                if let firstHot = hotTemplates.first {
+                    MainBannerView(template: firstHot)
+                }
                 
-                QuickActionsScrollView()
+                QuickActionsScrollView(templates: hotTemplates)
                 
-                HotTemplatesView(templates: MockData.hotTemplates)
+                if !hotTemplates.isEmpty {
+                    HotTemplatesView(templates: hotTemplates)
+                }
                 
                 RecentWorksView(works: store.works)
                 
@@ -22,6 +27,25 @@ struct HomeView: View {
         .background(Color.themeBackground.edgesIgnoringSafeArea(.all))
         .onAppear {
             store.refresh()
+            if hotTemplates.isEmpty {
+                RemoteTemplateService.shared.fetchFeaturedTemplates { fetched in
+                    if let fetched = fetched {
+                        self.hotTemplates = fetched.map { rt in
+                            Template(
+                                id: rt.id,
+                                name: rt.title,
+                                category: rt.category,
+                                description: rt.description,
+                                coverImage: rt.coverImage,
+                                isVip: false,
+                                usageCount: rt.usageCount,
+                                tags: [],
+                                fields: []
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }

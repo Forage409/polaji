@@ -264,10 +264,7 @@ struct WorkCardCell: View {
     }
     
     private func coverPlaceholder() -> String {
-        if let t = MockData.template(id: work.templateId) {
-            return t.coverImage
-        }
-        return "cover_persona"
+        return "cover_persona" // Fallback since we can't synchronously load remote template here without state
     }
     
     private func saveImage() {

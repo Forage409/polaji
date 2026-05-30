@@ -104,12 +104,22 @@ class RemoteTemplateService {
     }
     
     func uploadCover(imageData: Data, completion: @escaping (String?) -> Void) {
-        // Fallback mock for cover upload to prevent full blockage if R2 is not ready
-        DispatchQueue.global().asyncAfter(deadline: .now() + 1.5) {
-            DispatchQueue.main.async {
-                completion("https://r2.zhenghuoju.com/mock_cover_\(UUID().uuidString).jpg")
-            }
+        guard let url = URL(string: "\(baseURL)/api/upload") else {
+            completion(nil)
+            return
         }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("image/jpeg", forHTTPHeaderField: "Content-Type")
+        request.httpBody = imageData
+        
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            if let data = data, error == nil, let urlStr = String(data: data, encoding: .utf8) {
+                DispatchQueue.main.async { completion(urlStr) }
+            } else {
+                DispatchQueue.main.async { completion(nil) }
+            }
+        }.resume()
     }
     
     func publishTemplate(id: String, completion: @escaping (Bool) -> Void) {

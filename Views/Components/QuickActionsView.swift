@@ -8,22 +8,39 @@ struct QuickActionsScrollView: View {
         ("真心话大冒险", "icon_truth_dare", "truth_dare")
     ]
     
+    let templates: [Template]
+    
     var body: some View {
         HStack(spacing: 0) {
             ForEach(0..<actions.count, id: \.self) { index in
-                NavigationLink(destination: TemplateDetailView(template: getTemplate(for: actions[index].2))) {
+                if let template = getTemplate(for: actions[index].2) {
+                    NavigationLink(destination: TemplateDetailView(template: template)) {
+                        VStack(spacing: 8) {
+                            Image.bundle(actions[index].1)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 50, height: 50)
+                                .background(Color.white)
+                                .cornerRadius(16)
+                                .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
+                            
+                            Text(actions[index].0)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.themeTextMain)
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                } else {
+                    // Placeholder when loading or template missing
                     VStack(spacing: 8) {
-                        Image.bundle(actions[index].1)
-                            .resizable()
-                            .scaledToFit()
+                        Rectangle()
+                            .fill(Color.gray.opacity(0.2))
                             .frame(width: 50, height: 50)
-                            .background(Color.white)
                             .cornerRadius(16)
-                            .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
                         
                         Text(actions[index].0)
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(.themeTextMain)
+                            .foregroundColor(.gray)
                     }
                     .frame(maxWidth: .infinity)
                 }
@@ -32,7 +49,7 @@ struct QuickActionsScrollView: View {
         .padding(.horizontal)
     }
     
-    func getTemplate(for id: String) -> Template {
-        return MockData.allTemplates.first(where: { $0.id == id }) ?? MockData.allTemplates[0]
+    func getTemplate(for id: String) -> Template? {
+        return templates.first(where: { $0.id == id })
     }
 }

@@ -4,11 +4,13 @@ struct TemplatesView: View {
     @State private var selectedCategory = "全部"
     let categories = ["全部", "人设卡", "判官", "投票", "趣味"]
     
+    @State private var allTemplates: [Template] = []
+    
     var filteredTemplates: [Template] {
         if selectedCategory == "全部" {
-            return MockData.allTemplates
+            return allTemplates
         } else {
-            return MockData.allTemplates.filter { $0.category == selectedCategory }
+            return allTemplates.filter { $0.category == selectedCategory }
         }
     }
     
@@ -75,6 +77,31 @@ struct TemplatesView: View {
             .background(Color.themeBackground.edgesIgnoringSafeArea(.all))
             .navigationTitle("所有模板")
             .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                if allTemplates.isEmpty {
+                    loadData()
+                }
+            }
+        }
+    }
+    
+    private func loadData() {
+        RemoteTemplateService.shared.fetchTemplates { fetched in
+            if let fetched = fetched {
+                self.allTemplates = fetched.map { rt in
+                    Template(
+                        id: rt.id,
+                        name: rt.title,
+                        category: rt.category,
+                        description: rt.description,
+                        coverImage: rt.coverImage,
+                        isVip: false,
+                        usageCount: rt.usageCount,
+                        tags: [],
+                        fields: []
+                    )
+                }
+            }
         }
     }
 }

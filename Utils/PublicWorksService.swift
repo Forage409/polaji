@@ -70,7 +70,7 @@ class PublicWorksService {
             "authorAvatar": UserProfileStore.shared.avatarName,
             "tags": tags,
             "category": category,
-            "imageUrl": "https://r2.zhenghuoju.com/mock-upload-url" // MOCK R2 FOR NOW
+            "imageUrl": "temp_image_url_needs_backend_upload"
         ]
         
         request.httpBody = try? JSONSerialization.data(withJSONObject: payload)
@@ -83,29 +83,44 @@ class PublicWorksService {
     }
     
     func deleteWork(id: String, completion: @escaping (Bool) -> Void) {
-        // DELETE /api/works/:id
-        DispatchQueue.global().asyncAfter(deadline: .now() + 0.5) {
-            DispatchQueue.main.async {
-                completion(true)
-            }
+        guard let url = URL(string: "\(baseURL)/api/works/\(id)") else {
+            completion(false)
+            return
         }
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            DispatchQueue.main.async {
+                completion(error == nil && (response as? HTTPURLResponse)?.statusCode == 200)
+            }
+        }.resume()
     }
     
     func likeWork(id: String, completion: @escaping (Bool) -> Void) {
-        // POST /api/works/:id/like
-        DispatchQueue.global().asyncAfter(deadline: .now() + 0.2) {
-            DispatchQueue.main.async {
-                completion(true)
-            }
+        guard let url = URL(string: "\(baseURL)/api/works/\(id)/like") else {
+            completion(false)
+            return
         }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            DispatchQueue.main.async {
+                completion(error == nil && (response as? HTTPURLResponse)?.statusCode == 200)
+            }
+        }.resume()
     }
     
     func reportWork(id: String, completion: @escaping (Bool) -> Void) {
-        // POST /api/works/:id/report
-        DispatchQueue.global().asyncAfter(deadline: .now() + 0.2) {
-            DispatchQueue.main.async {
-                completion(true)
-            }
+        guard let url = URL(string: "\(baseURL)/api/works/\(id)/report") else {
+            completion(false)
+            return
         }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            DispatchQueue.main.async {
+                completion(error == nil && (response as? HTTPURLResponse)?.statusCode == 200)
+            }
+        }.resume()
     }
 }
