@@ -105,24 +105,30 @@ struct TemplatesWaterfallView: View {
     private func loadData() {
         isLoading = true
         hasError = false
-        RemoteTemplateService.shared.fetchTemplates { fetched in
-            isLoading = false
-            if let fetched = fetched {
-                self.templates = fetched.map { rt in
-                    Template(
-                        id: rt.id,
-                        name: rt.title,
-                        category: rt.category,
-                        description: rt.description,
-                        coverImage: rt.coverImage,
-                        isVip: false,
-                        usageCount: rt.usageCount,
-                        tags: [],
-                        fields: []
-                    )
+        Task {
+            do {
+                let fetched = try await RemoteTemplateService.shared.fetchTemplates()
+                await MainActor.run {
+                    self.isLoading = false
+                    self.templates = fetched.map { rt in
+                        Template(
+                            id: rt.id,
+                            name: rt.title,
+                            category: rt.category,
+                            description: rt.description,
+                            coverImage: rt.coverImage,
+                            isVip: false,
+                            usageCount: rt.usageCount,
+                            tags: [],
+                            fields: []
+                        )
+                    }
                 }
-            } else {
-                hasError = true
+            } catch {
+                await MainActor.run {
+                    self.isLoading = false
+                    self.hasError = true
+                }
             }
         }
     }
@@ -214,10 +220,16 @@ struct WorksFeedWaterfallView: View {
             }
         }
         .onAppear {
-            PublicWorksService.shared.fetchWorksFeed { result in
-                isLoading = false
-                if let fetched = result {
-                    self.works = fetched
+            Task {
+                do {
+                    let fetched = try await PublicWorksService.shared.fetchWorksFeed()
+                    await MainActor.run {
+                        self.isLoading = false
+                        self.works = fetched
+                    }
+                } catch {
+                    await MainActor.run { self.isLoading = false }
+                    print("Failed to load works feed: \(error)")
                 }
             }
         }
