@@ -14,11 +14,7 @@ struct HomeView: View {
                 
                 HotTemplatesView(templates: MockData.hotTemplates)
                 
-                if !store.works.isEmpty {
-                    RecentWorksView(works: store.works)
-                } else {
-                    RecentWorksView(works: MockData.recentWorks)
-                }
+                RecentWorksView(works: store.works)
                 
                 Spacer().frame(height: 80)
             }

@@ -67,7 +67,7 @@ struct ResultCardUI: View {
                 .padding(24)
             }
         }
-        .frame(width: 350, height: 520) // slightly taller to fit evidence
+        .frame(width: 350, height: 520, alignment: .top)
         .cornerRadius(24)
         .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
     }

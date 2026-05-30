@@ -33,39 +33,7 @@ struct ResultView: View {
             }
             
             VStack(spacing: 12) {
-                HStack(spacing: 12) {
-                    Button(action: {
-                        generateCard()
-                    }) {
-                        Text("换个结果")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(.themeTextMain)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 50)
-                            .background(Color.white)
-                            .cornerRadius(25)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 25)
-                                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-                            )
-                    }
-                    
-                    Button(action: {
-                        changeTone()
-                    }) {
-                        Text("换个风格")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(.themeTextMain)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 50)
-                            .background(Color.white)
-                            .cornerRadius(25)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 25)
-                                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-                            )
-                    }
-                }
+                // Reroll and Change Tone removed per P0.6 requirements
                 
                 HStack(spacing: 12) {
                     Button(action: {
@@ -85,10 +53,10 @@ struct ResultView: View {
                     }) {
                         Text("分享给好友")
                             .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(.white)
+                            .foregroundColor(.themeTextMain)
                             .frame(maxWidth: .infinity)
                             .frame(height: 50)
-                            .background(Color.themePurple)
+                            .background(Color.themePrimary)
                             .cornerRadius(25)
                     }
                 }
@@ -103,7 +71,7 @@ struct ResultView: View {
                 }
             }
             .padding(.horizontal, 20)
-            .padding(.bottom, 30)
+            .padding(.bottom, 20)
         }
         .background(Color.themeBackground.edgesIgnoringSafeArea(.all))
         .navigationTitle("生成结果")

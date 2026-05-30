@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct HeaderView: View {
+    @State private var isVip = false
+    
     var body: some View {
         HStack {
             HStack(spacing: 8) {
@@ -16,16 +18,28 @@ struct HeaderView: View {
             
             Spacer()
             
-            HStack(spacing: 12) {
-                Image.bundle("vip_icon")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(height: 32)
+            HStack(spacing: 4) {
+                Button(action: {
+                    isVip.toggle()
+                }) {
+                    Image.bundle("vip_icon")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(height: 32)
+                        .grayscale(isVip ? 0.0 : 1.0)
+                        .opacity(isVip ? 1.0 : 0.6)
+                }
                 
-                Image.bundle("settings_icon")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 32, height: 32)
+                Button(action: {
+                    // Settings action
+                }) {
+                    Image.bundle("settings_icon")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 28, height: 28)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
             }
         }
         .padding(.horizontal)

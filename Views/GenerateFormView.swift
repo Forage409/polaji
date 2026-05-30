@@ -163,7 +163,7 @@ struct GenerateFormView: View {
             
         default:
             inputGroup(title: "TA的昵称") { TextField("请输入昵称", text: $nickname) }
-            singleSelectGroup(title: "生成语气", options: ["可爱", "毒舌", "正经"], selection: $tone)
+            singleSelectGroup(title: "生成语气", options: ["可爱夸夸", "毒舌吐槽", "正经鉴定"], selection: $tone)
         }
     }
     

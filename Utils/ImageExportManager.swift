@@ -5,7 +5,13 @@ class ImageExportManager {
     
     @MainActor
     func renderImage<V: View>(from view: V, size: CGSize) -> UIImage? {
-        let renderer = ImageRenderer(content: view.frame(width: size.width, height: size.height))
+        let exportView = ZStack {
+            Color.white
+            view
+        }
+        .frame(width: size.width, height: size.height)
+        
+        let renderer = ImageRenderer(content: exportView)
         renderer.scale = UIScreen.main.scale
         return renderer.uiImage
     }

@@ -1,4 +1,4 @@
-﻿import SwiftUI
+import SwiftUI
 
 struct TemplatesView: View {
     @State private var selectedCategory = "全部"
@@ -44,30 +44,35 @@ struct TemplatesView: View {
                     LazyVGrid(columns: [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)], spacing: 16) {
                         ForEach(filteredTemplates) { template in
                             NavigationLink(destination: TemplateDetailView(template: template)) {
-                                VStack(alignment: .leading) {
-                                    Image(template.coverImage)
+                                VStack(alignment: .leading, spacing: 0) {
+                                    Image.bundle(template.coverImage)
                                         .resizable()
-                                        .scaledToFill()
-                                        .frame(height: 160)
-                                        .clipped()
-                                        .cornerRadius(12)
+                                        .scaledToFit()
+                                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .fill(Color.gray.opacity(0.1))
+                                        )
                                     
-                                    Text(template.name)
-                                        .font(.system(size: 14, weight: .bold))
-                                        .foregroundColor(.themeTextMain)
-                                        .lineLimit(1)
-                                        .padding(.top, 4)
-                                        .padding(.horizontal, 4)
-                                    
-                                    HStack {
-                                        Image(systemName: "flame.fill")
-                                            .foregroundColor(.red)
-                                        Text("\(template.usageCount/1000)k 人生成")
-                                            .foregroundColor(.themeTextSecondary)
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        Text(template.name)
+                                            .font(.system(size: 14, weight: .bold))
+                                            .foregroundColor(.themeTextMain)
+                                            .lineLimit(2)
+                                            .multilineTextAlignment(.leading)
+                                        
+                                        Spacer(minLength: 0)
+                                        
+                                        HStack {
+                                            Image(systemName: "flame.fill")
+                                                .foregroundColor(.themePrimary)
+                                                .font(.system(size: 10))
+                                            Text("\\(String(format: "%.1f", Double(template.usageCount)/10000.0))w 人生成")
+                                                .font(.system(size: 10))
+                                                .foregroundColor(.themeTextSecondary)
+                                        }
                                     }
-                                    .font(.system(size: 10))
-                                    .padding(.horizontal, 4)
-                                    .padding(.bottom, 8)
+                                    .padding(12)
                                 }
                                 .background(Color.white)
                                 .cornerRadius(12)
