@@ -4,7 +4,7 @@ struct MainBannerView: View {
     var body: some View {
         NavigationLink(destination: TemplateDetailView(template: MockData.allTemplates.first(where: { $0.id == "persona_card" }) ?? MockData.allTemplates[0])) {
             ZStack(alignment: .leading) {
-                Image("banner_bg_decorations")
+                Image.bundle("banner_bg_decorations")
                     .resizable()
                     .scaledToFill()
                     .frame(height: 140)
@@ -35,7 +35,7 @@ struct MainBannerView: View {
                     
                     Spacer()
                     
-                    Image("banner_character")
+                    Image.bundle("banner_character")
                         .resizable()
                         .scaledToFit()
                         .frame(height: 120)

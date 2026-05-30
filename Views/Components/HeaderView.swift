@@ -8,7 +8,7 @@ struct HeaderView: View {
                     .font(.title2)
                     .fontWeight(.bold)
                     .foregroundColor(.themeTextMain)
-                Image("logo")
+                Image.bundle("logo")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 24, height: 24)
@@ -17,12 +17,12 @@ struct HeaderView: View {
             Spacer()
             
             HStack(spacing: 12) {
-                Image("vip_icon")
+                Image.bundle("vip_icon")
                     .resizable()
                     .scaledToFit()
                     .frame(height: 24)
                 
-                Image("settings_icon")
+                Image.bundle("settings_icon")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 24, height: 24)

@@ -1,4 +1,4 @@
-﻿import SwiftUI
+import SwiftUI
 
 struct ResultCardUI: View {
     let card: GeneratedCard
@@ -19,7 +19,7 @@ struct ResultCardUI: View {
                                 .foregroundColor(.themeTextSecondary)
                         }
                         Spacer()
-                        Image("logo")
+                        Image.bundle("logo")
                             .resizable()
                             .scaledToFit()
                             .frame(width: 30, height: 30)
@@ -57,7 +57,7 @@ struct ResultCardUI: View {
                         
                         Spacer()
                         
-                        Image(card.mainImageName)
+                        Image.bundle(card.mainImageName)
                             .resizable()
                             .scaledToFit()
                             .frame(width: 120, height: 120)

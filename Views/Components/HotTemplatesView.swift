@@ -23,7 +23,7 @@ struct HotTemplatesView: View {
                 ForEach(templates) { template in
                     NavigationLink(destination: TemplateDetailView(template: template)) {
                         VStack(alignment: .leading, spacing: 0) {
-                            Image(template.coverImage)
+                            Image.bundle(template.coverImage)
                                 .resizable()
                                 .scaledToFill()
                                 .frame(height: 120)

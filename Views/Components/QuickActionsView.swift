@@ -13,7 +13,7 @@ struct QuickActionsScrollView: View {
             ForEach(0..<actions.count, id: \.self) { index in
                 NavigationLink(destination: TemplateDetailView(template: getTemplate(for: actions[index].2))) {
                     VStack(spacing: 8) {
-                        Image(actions[index].1)
+                        Image.bundle(actions[index].1)
                             .resizable()
                             .scaledToFit()
                             .frame(width: 50, height: 50)

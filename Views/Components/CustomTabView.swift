@@ -26,7 +26,7 @@ struct CustomTabView: View {
                         .fill(Color.themePrimary)
                         .frame(width: 56, height: 56)
                     
-                    Image("tab_create")
+                    Image.bundle("tab_create")
                         .resizable()
                         .scaledToFit()
                         .frame(width: 24, height: 24)
@@ -62,7 +62,7 @@ struct TabBarButton: View {
     var body: some View {
         Button(action: action) {
             VStack(spacing: 4) {
-                Image(imageName)
+                Image.bundle(imageName)
                     .resizable()
                     .scaledToFit()
                     .frame(width: 24, height: 24)
