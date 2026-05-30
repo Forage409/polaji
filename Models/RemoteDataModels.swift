@@ -55,3 +55,11 @@ struct TemplateStats: Codable {
     let favoriteCount: Int
     let reportCount: Int
 }
+
+struct CreatorDashboard: Codable {
+    let publishedCount: Int
+    let totalViewCount: Int
+    let totalGenerateCount: Int
+    let totalShareCount: Int
+    let totalLikeCount: Int
+}

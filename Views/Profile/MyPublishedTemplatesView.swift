@@ -24,17 +24,21 @@ struct MyPublishedTemplatesView: View {
         .background(Color.themeBackground.edgesIgnoringSafeArea(.all))
         .navigationTitle("我的发布")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear(perform: loadData)
+        .onAppear {
+            if templates.isEmpty {
+                loadData()
+            }
+        }
     }
     
     private func loadData() {
-        // Mock remote data
-        let mock = RemoteTemplate(
-            id: "mock1", title: "测试玩法", description: "这是一个测试的自己发布的玩法", coverImage: "", category: "趣味", authorId: "me", authorName: "我",
-            viewCount: 1500, startCount: 800, generateCount: 500, usageCount: 500, shareCount: 100, likeCount: 50, reportCount: 0,
-            status: "published", createdAt: "2023-10-01", updatedAt: "2023-10-01", formConfigRaw: nil, resultConfigRaw: nil
-        )
-        templates = [mock]
+        RemoteCreatorService.shared.fetchMyPublishedTemplates { fetched in
+            if let fetched = fetched {
+                self.templates = fetched
+            } else {
+                self.templates = []
+            }
+        }
     }
     
     @ViewBuilder
