@@ -194,22 +194,39 @@ export default {
             if (path === "/api/works" && method === "POST") {
                 try {
                     const body: any = await request.json();
-                    console.log("Publishing work:", { id: body.id, title: body.title, userId });
+                    console.log("Publishing work - raw body:", JSON.stringify(body));
+                    console.log("Publishing work - userId from auth:", userId);
+
+                    // Validate required fields
+                    if (!body.id || !body.templateId || !body.title || !body.imageUrl) {
+                        return Response.json({
+                            error: "Missing required fields",
+                            details: "id, templateId, title, and imageUrl are required",
+                            received: {
+                                id: body.id,
+                                templateId: body.templateId,
+                                title: body.title,
+                                imageUrl: body.imageUrl
+                            }
+                        }, { status: 400, headers: corsHeaders });
+                    }
 
                     // Ensure all fields have valid values (no undefined)
                     const workData = {
-                        id: body.id || '',
-                        templateId: body.templateId || '',
-                        title: body.title || '',
-                        description: body.description || '',
+                        id: String(body.id),
+                        templateId: String(body.templateId),
+                        title: String(body.title),
+                        description: body.description ? String(body.description) : '',
                         isAnonymous: body.isAnonymous ? 1 : 0,
-                        authorId: userId || '',
-                        authorName: body.authorName || '',
-                        authorAvatar: body.authorAvatar || '',
+                        authorId: String(userId),
+                        authorName: body.authorName ? String(body.authorName) : '',
+                        authorAvatar: body.authorAvatar ? String(body.authorAvatar) : '',
                         tags: JSON.stringify(body.tags || []),
-                        category: body.category || '',
-                        imageUrl: body.imageUrl || ''
+                        category: body.category ? String(body.category) : '',
+                        imageUrl: String(body.imageUrl)
                     };
+
+                    console.log("Publishing work - processed data:", JSON.stringify(workData));
 
                     await env.DB.prepare(`
                         INSERT INTO works (id, template_id, title, description, is_anonymous, author_id, author_name, author_avatar, tags, category, image_url, like_count)
@@ -226,6 +243,7 @@ export default {
                     return Response.json({
                         error: "Failed to publish work",
                         details: err.message,
+                        stack: err.stack,
                         code: "PUBLISH_FAILED"
                     }, { status: 500, headers: corsHeaders });
                 }
