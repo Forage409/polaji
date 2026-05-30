@@ -12,33 +12,49 @@ class AnonymousIdentityManager {
     
     private(set) var currentUserId: String = ""
     private(set) var currentInstallToken: String = ""
-    
+    private var isRegistered: Bool = false
+
     private init() {
         initializeIdentity()
     }
-    
+
     private func initializeIdentity() {
         let loadedId = loadFromKeychain(account: idAccountName)
         let loadedToken = loadFromKeychain(account: tokenAccountName)
-        
+
         if let id = loadedId, let token = loadedToken {
             self.currentUserId = id
             self.currentInstallToken = token
+            self.isRegistered = true  // Assume already registered if loaded from keychain
         } else {
             // Generate new identity
             let newId = UUID().uuidString
             let newToken = UUID().uuidString
-            
+
             saveToKeychain(account: idAccountName, value: newId)
             saveToKeychain(account: tokenAccountName, value: newToken)
-            
+
             self.currentUserId = newId
             self.currentInstallToken = newToken
-            
-            // Asynchronously register the new device with the backend
+
+            // Synchronously register the new device with the backend
             Task {
-                try? await registerDevice(userId: newId, token: newToken)
+                await registerDeviceSync(userId: newId, token: newToken)
             }
+        }
+    }
+
+    private func registerDeviceSync(userId: String, token: String) async {
+        do {
+            try await registerDevice(userId: userId, token: token)
+            self.isRegistered = true
+            print("Device registered successfully: \(userId)")
+        } catch {
+            print("Failed to register device: \(error)")
+            // Retry after a delay
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            try? await registerDevice(userId: userId, token: token)
+            self.isRegistered = true
         }
     }
     

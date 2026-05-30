@@ -14,14 +14,21 @@ async function hashToken(token: string): Promise<string> {
 async function verifyAuth(request: Request, env: Env): Promise<string | null> {
     const userId = request.headers.get("X-Anonymous-User-Id");
     const authHeader = request.headers.get("Authorization");
-    
+
     if (!userId || !authHeader || !authHeader.startsWith("Bearer ")) return null;
-    
+
     const token = authHeader.substring(7);
     const tokenHash = await hashToken(token);
-    const user: any = await env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(userId).first();
-    
-    if (!user || user.install_token_hash !== tokenHash) return null;
+    let user: any = await env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(userId).first();
+
+    // If user doesn't exist, auto-register them
+    if (!user) {
+        console.log("User not found, auto-registering:", userId);
+        await env.DB.prepare(`INSERT OR REPLACE INTO users (id, install_token_hash, created_at) VALUES (?, ?, CURRENT_TIMESTAMP)`).bind(userId, tokenHash).run();
+        user = { id: userId, install_token_hash: tokenHash };
+    }
+
+    if (user.install_token_hash !== tokenHash) return null;
     return userId;
 }
 
