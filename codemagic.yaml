@@ -33,11 +33,14 @@ workflows:
               -configuration Release \
               -destination "generic/platform=iOS" \
               -derivedDataPath build/DerivedData \
-              -jobs 2 \
+              -jobs 1 \
               CODE_SIGN_IDENTITY="" \
               CODE_SIGNING_ALLOWED=NO \
               CODE_SIGNING_REQUIRED=NO \
-              SWIFT_ENABLE_EXPLICIT_MODULES=NO; then
+              SWIFT_ENABLE_EXPLICIT_MODULES=NO \
+              SWIFT_ENABLE_BATCH_MODE=NO \
+              SWIFT_ENABLE_INCREMENTAL_COMPILATION=NO \
+              COMPILER_INDEX_STORE_ENABLE=NO; then
               echo "=== Build succeeded on attempt $ATTEMPT ==="
               exit 0
             fi
