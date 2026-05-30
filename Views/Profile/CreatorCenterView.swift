@@ -5,7 +5,7 @@ struct CreatorCenterView: View {
         case loading
         case loaded(CreatorDashboard)
         case empty
-        case error
+        case error(String)
     }
     
     @State private var state: ViewState = .loading
@@ -21,8 +21,8 @@ struct CreatorCenterView: View {
                 contentView(dashboard: dashboard)
             case .empty:
                 emptyView
-            case .error:
-                errorView
+            case .error(let msg):
+                errorView(message: msg)
             }
         }
         .background(Color.themeBackground.edgesIgnoringSafeArea(.all))
@@ -50,15 +50,24 @@ struct CreatorCenterView: View {
     
     private func loadData() {
         state = .loading
-        RemoteCreatorService.shared.fetchCreatorDashboard { dashboard in
-            if let dashboard = dashboard {
-                if dashboard.publishedCount == 0 {
-                    state = .empty
-                } else {
-                    state = .loaded(dashboard)
+        Task {
+            do {
+                let dashboard = try await RemoteCreatorService.shared.fetchCreatorDashboard()
+                DispatchQueue.main.async {
+                    if dashboard.publishedCount == 0 {
+                        self.state = .empty
+                    } else {
+                        self.state = .loaded(dashboard)
+                    }
                 }
-            } else {
-                state = .error
+            } catch let error as APIError {
+                DispatchQueue.main.async {
+                    self.state = .error(error.localizedDescription)
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.state = .error(error.localizedDescription)
+                }
             }
         }
     }
@@ -181,15 +190,17 @@ struct CreatorCenterView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     
-    private var errorView: some View {
+    private func errorView(message: String) -> some View {
         VStack(spacing: 16) {
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 50))
                 .foregroundColor(.red.opacity(0.6))
             
-            Text("加载数据失败，请检查网络或稍后再试")
+            Text(message)
                 .font(.system(size: 14))
                 .foregroundColor(.themeTextSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
             
             Button(action: {
                 loadData()

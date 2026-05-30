@@ -1,44 +1,129 @@
 import SwiftUI
 
 struct MyPublishedTemplatesView: View {
-    @State private var templates: [RemoteTemplate] = []
+    enum ViewState {
+        case loading
+        case loaded([RemoteTemplate])
+        case empty
+        case error(String)
+    }
+    
+    @State private var state: ViewState = .loading
     
     var body: some View {
-        ScrollView {
-            VStack(spacing: 16) {
-                if templates.isEmpty {
-                    Text("暂无发布的玩法")
-                        .foregroundColor(.themeTextSecondary)
-                        .padding(.top, 100)
-                } else {
-                    ForEach(templates) { template in
-                        NavigationLink(destination: TemplateStatsView(template: template)) {
-                            publishedTemplateCard(template)
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    }
-                }
+        Group {
+            switch state {
+            case .loading:
+                ProgressView("加载数据中...")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .loaded(let templates):
+                contentView(templates: templates)
+            case .empty:
+                emptyView
+            case .error(let msg):
+                errorView(message: msg)
             }
-            .padding()
         }
         .background(Color.themeBackground.edgesIgnoringSafeArea(.all))
         .navigationTitle("我的发布")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(action: {
+                    loadData()
+                }) {
+                    Image(systemName: "arrow.clockwise")
+                        .foregroundColor(.themeTextMain)
+                }
+            }
+        }
         .onAppear {
-            if templates.isEmpty {
+            if case .loading = state {
                 loadData()
             }
         }
     }
     
     private func loadData() {
-        RemoteCreatorService.shared.fetchMyPublishedTemplates { fetched in
-            if let fetched = fetched {
-                self.templates = fetched
-            } else {
-                self.templates = []
+        state = .loading
+        Task {
+            do {
+                let templates = try await RemoteCreatorService.shared.fetchMyPublishedTemplates()
+                DispatchQueue.main.async {
+                    if templates.isEmpty {
+                        self.state = .empty
+                    } else {
+                        self.state = .loaded(templates)
+                    }
+                }
+            } catch let error as APIError {
+                DispatchQueue.main.async {
+                    self.state = .error(error.localizedDescription)
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.state = .error(error.localizedDescription)
+                }
             }
         }
+    }
+    
+    @ViewBuilder
+    private func contentView(templates: [RemoteTemplate]) -> some View {
+        ScrollView {
+            if #available(iOS 15.0, *) {
+                Color.clear.frame(height: 0)
+                    .refreshable {
+                        loadData()
+                    }
+            }
+            VStack(spacing: 16) {
+                ForEach(templates) { template in
+                    NavigationLink(destination: TemplateStatsView(template: template)) {
+                        publishedTemplateCard(template)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+            }
+            .padding()
+        }
+    }
+    
+    private var emptyView: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "doc.text.magnifyingglass")
+                .font(.system(size: 60))
+                .foregroundColor(.gray.opacity(0.5))
+            Text("暂无发布的玩法")
+                .font(.system(size: 16))
+                .foregroundColor(.themeTextSecondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+    
+    private func errorView(message: String) -> some View {
+        VStack(spacing: 16) {
+            Image(systemName: "xmark.octagon")
+                .font(.system(size: 50))
+                .foregroundColor(.red.opacity(0.6))
+            Text(message)
+                .font(.system(size: 14))
+                .foregroundColor(.themeTextSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
+            Button(action: {
+                loadData()
+            }) {
+                Text("点击重试")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.themePrimary)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 10)
+                    .background(Color.themePrimary.opacity(0.1))
+                    .cornerRadius(18)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     
     @ViewBuilder
@@ -95,8 +180,74 @@ struct MyPublishedTemplatesView: View {
 struct TemplateStatsView: View {
     let template: RemoteTemplate
     
+    enum ViewState {
+        case loading
+        case loaded(TemplateStats)
+        case error(String)
+    }
+    
+    @State private var state: ViewState = .loading
+    
     var body: some View {
+        Group {
+            switch state {
+            case .loading:
+                ProgressView("拉取数据中...")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .loaded(let stats):
+                statsContentView(stats: stats)
+            case .error(let msg):
+                VStack(spacing: 16) {
+                    Text(msg)
+                        .foregroundColor(.themeTextSecondary)
+                        .multilineTextAlignment(.center)
+                        .padding()
+                    Button("重试") {
+                        loadStats()
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .background(Color.themeBackground.edgesIgnoringSafeArea(.all))
+        .navigationTitle("玩法数据")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            if case .loading = state {
+                loadStats()
+            }
+        }
+    }
+    
+    private func loadStats() {
+        state = .loading
+        Task {
+            do {
+                let stats = try await RemoteCreatorService.shared.fetchTemplateStats(templateId: template.id)
+                DispatchQueue.main.async {
+                    self.state = .loaded(stats)
+                }
+            } catch let error as APIError {
+                DispatchQueue.main.async {
+                    self.state = .error(error.localizedDescription)
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.state = .error(error.localizedDescription)
+                }
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func statsContentView(stats: TemplateStats) -> some View {
         ScrollView {
+            if #available(iOS 15.0, *) {
+                Color.clear.frame(height: 0)
+                    .refreshable {
+                        loadStats()
+                    }
+            }
             VStack(spacing: 24) {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(template.title)
@@ -114,10 +265,11 @@ struct TemplateStatsView: View {
                     Text("数据漏斗")
                         .font(.system(size: 16, weight: .bold))
                     
-                    funnelRow(title: "浏览数 (View)", count: template.viewCount, max: max(1, template.viewCount), color: .purple)
-                    funnelRow(title: "点击开始 (Start)", count: template.startCount, max: max(1, template.viewCount), color: .blue)
-                    funnelRow(title: "成功生成 (Generate)", count: template.generateCount, max: max(1, template.viewCount), color: .orange)
-                    funnelRow(title: "分享数 (Share)", count: template.shareCount, max: max(1, template.viewCount), color: .green)
+                    let maxVal = max(1, stats.viewCount)
+                    funnelRow(title: "浏览数 (View)", count: stats.viewCount, max: maxVal, color: .purple)
+                    funnelRow(title: "点击开始 (Start)", count: stats.startCount, max: maxVal, color: .blue)
+                    funnelRow(title: "成功生成 (Generate)", count: stats.generateCount, max: maxVal, color: .orange)
+                    funnelRow(title: "分享数 (Share)", count: stats.shareCount, max: maxVal, color: .green)
                 }
                 .padding()
                 .background(Color.white)
@@ -125,9 +277,6 @@ struct TemplateStatsView: View {
             }
             .padding()
         }
-        .background(Color.themeBackground.edgesIgnoringSafeArea(.all))
-        .navigationTitle("玩法数据")
-        .navigationBarTitleDisplayMode(.inline)
     }
     
     private func funnelRow(title: String, count: Int, max: Int, color: Color) -> some View {
@@ -153,3 +302,4 @@ struct TemplateStatsView: View {
         }
     }
 }
+
