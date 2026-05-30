@@ -7,7 +7,7 @@ struct Template: Identifiable {
     let description: String
     let coverImage: String
     let isVip: Bool
-    let usageCount: Int
+    var usageCount: Int
     let tags: [String]
     let fields: [String]
 }
