@@ -12,9 +12,7 @@ struct EditorFormRulesView: View {
                     .padding(.horizontal)
                 
                 ForEach($draft.formFields) { $field in
-                    if let index = draft.formFields.firstIndex(where: { $0.id == field.wrappedValue.id }) {
-                        formFieldRow(field: $field, index: index)
-                    }
+                    formFieldRow(field: $field)
                 }
                 
                 Button(action: {
@@ -44,7 +42,8 @@ struct EditorFormRulesView: View {
     }
     
     @ViewBuilder
-    private func formFieldRow(field: Binding<FormFieldDraft>, index: Int) -> some View {
+    private func formFieldRow(field: Binding<FormFieldDraft>) -> some View {
+        let index = draft.formFields.firstIndex(where: { $0.id == field.wrappedValue.id }) ?? 0
         VStack(spacing: 12) {
             HStack {
                 Text("字段 \(index + 1)")
