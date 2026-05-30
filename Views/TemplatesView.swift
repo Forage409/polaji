@@ -67,7 +67,7 @@ struct TemplatesView: View {
                                             Image(systemName: "flame.fill")
                                                 .foregroundColor(.themePrimary)
                                                 .font(.system(size: 10))
-                                            Text("\\(String(format: "%.1f", Double(template.usageCount)/10000.0))w 人生成")
+                                            Text("\(String(format: "%.1f", Double(template.usageCount)/10000.0))w 人生成")
                                                 .font(.system(size: 10))
                                                 .foregroundColor(.themeTextSecondary)
                                         }
