@@ -12,7 +12,7 @@ struct EditorFormRulesView: View {
                     .padding(.horizontal)
                 
                 ForEach($draft.formFields) { $field in
-                    if let index = draft.formFields.firstIndex(where: { $0.id == field.id }) {
+                    if let index = draft.formFields.firstIndex(where: { $0.id == field.wrappedValue.id }) {
                         formFieldRow(field: $field, index: index)
                     }
                 }
