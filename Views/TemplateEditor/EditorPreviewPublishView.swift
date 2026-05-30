@@ -107,6 +107,7 @@ struct EditorPreviewPublishView: View {
         let capturedTitle = self.draft.title
         let capturedDescription = self.draft.description
         let capturedCategory = self.draft.category
+        let dismissAction = self.dismiss
         
         Task {
             do {
@@ -144,7 +145,7 @@ struct EditorPreviewPublishView: View {
                         self.showAlert = true
                         NotificationCenter.default.post(name: NSNotification.Name("RefreshFeed"), object: nil)
                         // Trigger dismiss directly in MainActor, instead of DispatchQueue.main.asyncAfter which captures stale environment
-                        self.dismiss()
+                        dismissAction()
                     } else {
                         self.alertMsg = "发布失败，请检查网络"
                         self.showAlert = true
