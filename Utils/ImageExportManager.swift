@@ -49,7 +49,9 @@ class ImageExportManager {
     
     func loadImage(from path: String) -> UIImage? {
         // Support legacy absolute paths (though they break on restart)
-        if path.starts(with: "/") || path.starts(with: "file://") {
+        if path.starts(with: "file://"), let url = URL(string: path) {
+            return UIImage(contentsOfFile: url.path)
+        } else if path.starts(with: "/") {
             return UIImage(contentsOfFile: path)
         }
         

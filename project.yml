@@ -14,6 +14,8 @@ targets:
           - "project.yml"
           - ".git"
           - "scratch"
+          - "backend"
+          - "devin_diffs"
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.zhenghuoju.app
       GENERATE_INFOPLIST_FILE: YES
