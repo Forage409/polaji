@@ -13,9 +13,11 @@ struct HotTemplatesView: View {
                 
                 Spacer()
                 
-                Text("更多 >")
-                    .font(.subheadline)
-                    .foregroundColor(.themeTextSecondary)
+                NavigationLink(destination: DiscoverView()) {
+                    Text("更多 >")
+                        .font(.subheadline)
+                        .foregroundColor(.themeTextSecondary)
+                }
             }
             .padding(.horizontal)
             

@@ -19,10 +19,25 @@ export default {
         }
         
         if (url.pathname === "/api/works/feed" && request.method === "GET") {
-            // Fetch from D1
             try {
                 const { results } = await env.DB.prepare("SELECT * FROM works ORDER BY created_at DESC LIMIT 20").all();
                 return Response.json(results, { headers: corsHeaders });
+            } catch (e: any) {
+                return Response.json({ error: e.message }, { status: 500, headers: corsHeaders });
+            }
+        }
+        
+        if (url.pathname === "/api/works" && request.method === "POST") {
+            try {
+                const body: any = await request.json();
+                await env.DB.prepare(`
+                    INSERT INTO works (id, templateId, title, description, isAnonymous, authorId, authorName, authorAvatar, tags, category, imageUrl, likeCount, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, 0, CURRENT_TIMESTAMP)
+                `).bind(
+                    body.id, body.templateId, body.title, body.description, body.isAnonymous ? 1 : 0,
+                    body.authorId, body.authorName, body.authorAvatar, body.category || '', body.imageUrl || ''
+                ).run();
+                return Response.json({ success: true }, { headers: corsHeaders });
             } catch (e: any) {
                 return Response.json({ error: e.message }, { status: 500, headers: corsHeaders });
             }

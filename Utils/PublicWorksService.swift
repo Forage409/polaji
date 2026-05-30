@@ -11,30 +11,75 @@ class PublicWorksService {
     private init() {}
     
     func fetchWorksFeed(completion: @escaping ([PublicWork]?) -> Void) {
-        // GET /api/works/feed
-        DispatchQueue.global().asyncAfter(deadline: .now() + 1.0) {
-            DispatchQueue.main.async {
-                completion([])
-            }
+        guard let url = URL(string: "\(baseURL)/api/works/feed") else {
+            completion(nil)
+            return
         }
+        URLSession.shared.dataTask(with: url) { data, response, error in
+            guard let data = data, error == nil else {
+                DispatchQueue.main.async { completion(nil) }
+                return
+            }
+            do {
+                let decoded = try JSONDecoder().decode([PublicWork].self, from: data)
+                DispatchQueue.main.async { completion(decoded) }
+            } catch {
+                print("Failed to decode works feed: \(error)")
+                DispatchQueue.main.async { completion(nil) }
+            }
+        }.resume()
     }
     
     func fetchWorkDetail(id: String, completion: @escaping (PublicWork?) -> Void) {
-        // GET /api/works/:id
-        DispatchQueue.global().asyncAfter(deadline: .now() + 0.5) {
-            DispatchQueue.main.async {
-                completion(nil)
-            }
+        guard let url = URL(string: "\(baseURL)/api/works/\(id)") else {
+            completion(nil)
+            return
         }
+        URLSession.shared.dataTask(with: url) { data, response, error in
+            guard let data = data, error == nil else {
+                DispatchQueue.main.async { completion(nil) }
+                return
+            }
+            do {
+                let decoded = try JSONDecoder().decode(PublicWork.self, from: data)
+                DispatchQueue.main.async { completion(decoded) }
+            } catch {
+                DispatchQueue.main.async { completion(nil) }
+            }
+        }.resume()
     }
     
     func publishWork(title: String, description: String, isAnonymous: Bool, tags: [String], templateId: String, category: String, imageData: Data, completion: @escaping (Bool) -> Void) {
-        // POST /api/uploads/work to get R2 URL, then POST /api/works to create metadata
-        DispatchQueue.global().asyncAfter(deadline: .now() + 2.0) {
-            DispatchQueue.main.async {
-                completion(true)
-            }
+        guard let url = URL(string: "\(baseURL)/api/works") else {
+            completion(false)
+            return
         }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let payload: [String: Any] = [
+            "id": UUID().uuidString,
+            "templateId": templateId,
+            "title": title,
+            "description": description,
+            "isAnonymous": isAnonymous,
+            "authorId": UserProfileStore.shared.userId,
+            "authorName": UserProfileStore.shared.nickname,
+            "authorAvatar": UserProfileStore.shared.avatarName,
+            "tags": tags,
+            "category": category,
+            "imageUrl": "https://r2.zhenghuoju.com/mock-upload-url" // MOCK R2 FOR NOW
+        ]
+        
+        request.httpBody = try? JSONSerialization.data(withJSONObject: payload)
+        
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            DispatchQueue.main.async {
+                completion(error == nil && (response as? HTTPURLResponse)?.statusCode == 200)
+            }
+        }.resume()
     }
     
     func deleteWork(id: String, completion: @escaping (Bool) -> Void) {

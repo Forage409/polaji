@@ -111,21 +111,23 @@ struct EditProfileView: View {
                 .foregroundColor(.themeTextSecondary)
             
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
+                HStack(spacing: 14) {
                     ForEach(avatarOptions, id: \.self) { name in
                         Button(action: { draftAvatar = name }) {
                             AvatarImage(name: name)
                                 .scaledToFill()
-                                .frame(width: 56, height: 56)
+                                .frame(width: 52, height: 52)
                                 .clipShape(Circle())
+                                .padding(3)
                                 .overlay(
                                     Circle()
                                         .stroke(name == draftAvatar ? Color.themePrimary : Color.clear, lineWidth: 3)
                                 )
                         }
+                        .padding(.vertical, 4) // Prevent vertical clipping
                     }
                 }
-                .padding(.horizontal, 4)
+                .padding(.horizontal, 16)
             }
         }
         .padding(.vertical, 18)

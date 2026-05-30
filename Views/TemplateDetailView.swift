@@ -47,7 +47,7 @@ struct TemplateDetailView: View {
                         .padding(20)
                     }
                     
-                    VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 20) {
                         Text("模板介绍")
                             .font(.system(size: 18, weight: .bold))
                             .foregroundColor(.themeTextMain)
@@ -55,13 +55,21 @@ struct TemplateDetailView: View {
                         Text(template.description)
                             .font(.system(size: 15))
                             .foregroundColor(.themeTextSecondary)
-                            .lineSpacing(4)
+                            .lineSpacing(6)
+                        
+                        // Fake rich content block to show a preview image or extra details
+                        if template.category != "未知" {
+                            Image.bundle(template.coverImage)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(height: 180)
+                                .clipShape(RoundedRectangle(cornerRadius: 16))
+                                .padding(.top, 8)
+                        }
                     }
                     .padding(24)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.white)
-                    .cornerRadius(24)
-                    .offset(y: -24)
+                    .background(Color.themeBackground)
                 }
             }
             .edgesIgnoringSafeArea(.top)

@@ -2,7 +2,6 @@ import SwiftUI
  
 struct SettingsView: View {
     @ObservedObject private var vip = VipManager.shared
-    @ObservedObject private var cloudSync = CloudSyncManager.shared
     
     @State private var cacheSize: Int64 = 0
     @State private var isClearing = false
@@ -41,48 +40,13 @@ struct SettingsView: View {
                     .disabled(isClearing)
                 }
                 
-                section(title: "iCloud 同步") {
+                section(title: "云端服务") {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("整活局使用你的 iCloud 保存私人作品，不需要注册账号。卸载重装后，只要登录同一个 Apple ID，即可恢复数据。数据恢复依赖 iCloud 状态、Apple ID 和可用存储空间。")
+                        Text("你的公开作品和点赞记录将自动同步到整活局云端，无需手动干预。")
                             .font(.system(size: 12))
                             .foregroundColor(.themeTextSecondary)
                             .padding(.horizontal, 16)
-                            .padding(.top, 12)
-                        
-                        HStack {
-                            Text("状态")
-                                .font(.system(size: 15, weight: .medium))
-                                .foregroundColor(.themeTextMain)
-                            Spacer()
-                            Text(cloudSync.iCloudStatus)
-                                .font(.system(size: 14))
-                                .foregroundColor(.themeTextSecondary)
-                        }
-                        .padding(.horizontal, 16)
-                        
-                        if let lastSync = cloudSync.lastSyncTime {
-                            HStack {
-                                Text("上次同步")
-                                    .font(.system(size: 15, weight: .medium))
-                                    .foregroundColor(.themeTextMain)
-                                Spacer()
-                                Text(lastSync, style: .time)
-                                    .font(.system(size: 14))
-                                    .foregroundColor(.themeTextSecondary)
-                            }
-                            .padding(.horizontal, 16)
-                        }
-                        
-                        Button(action: { cloudSync.syncNow() }) {
-                            Text(cloudSync.isSyncing ? "同步中..." : "立即同步")
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundColor(.themePrimary)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
-                        }
-                        .disabled(cloudSync.isSyncing)
-                        
-                        Divider()
+                            .padding(.vertical, 12)
                     }
                 }
                 
@@ -133,7 +97,6 @@ struct SettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             refreshCacheSize()
-            cloudSync.checkAccountStatus()
         }
         .alert(isPresented: $showClearAlert) {
             Alert(
