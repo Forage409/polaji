@@ -13,19 +13,41 @@ workflows:
       - name: Show Xcode version
         script: |
           xcodebuild -version
+      - name: Clean DerivedData
+        script: |
+          rm -rf build/DerivedData
       - name: Build unsigned iPhone app
         script: |
           set -euo pipefail
-          xcrun actool --compile build/DerivedData/actool_out --minimum-deployment-target 16.0 --platform iphoneos Assets.xcassets || true
-          xcodebuild build \
-            -project ZhengHuoJu.xcodeproj \
-            -scheme ZhengHuoJu \
-            -configuration Release \
-            -destination "generic/platform=iOS" \
-            -derivedDataPath build/DerivedData \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO
+          
+          MAX_RETRIES=3
+          ATTEMPT=0
+          
+          while [ $ATTEMPT -lt $MAX_RETRIES ]; do
+            ATTEMPT=$((ATTEMPT + 1))
+            echo "=== Build attempt $ATTEMPT of $MAX_RETRIES ==="
+            
+            if xcodebuild clean build \
+              -project ZhengHuoJu.xcodeproj \
+              -scheme ZhengHuoJu \
+              -configuration Release \
+              -destination "generic/platform=iOS" \
+              -derivedDataPath build/DerivedData \
+              -jobs 2 \
+              CODE_SIGN_IDENTITY="" \
+              CODE_SIGNING_ALLOWED=NO \
+              CODE_SIGNING_REQUIRED=NO; then
+              echo "=== Build succeeded on attempt $ATTEMPT ==="
+              exit 0
+            fi
+            
+            echo "=== Build failed on attempt $ATTEMPT, cleaning and retrying... ==="
+            rm -rf build/DerivedData
+            sleep 5
+          done
+          
+          echo "=== All $MAX_RETRIES attempts failed ==="
+          exit 1
       - name: Package unsigned IPA
         script: |
           set -euo pipefail
@@ -55,13 +77,12 @@ workflows:
       - name: Compile for iOS simulator
         script: |
           set -euo pipefail
-          xcrun actool --compile build/DerivedData/actool_out --minimum-deployment-target 16.0 --platform iphoneos Assets.xcassets || true
-          xcodebuild build \
+          xcodebuild clean build \
             -project ZhengHuoJu.xcodeproj \
             -scheme ZhengHuoJu \
             -configuration Debug \
             -destination "platform=iOS Simulator,name=iPhone 16" \
-            -derivedDataPath build/DerivedData
+            -derivedDataPath build/DerivedData \
+            -jobs 2
     artifacts:
       - build/DerivedData/Build/Products/Debug-iphonesimulator/ZhengHuoJu.app
-
