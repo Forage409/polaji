@@ -2,13 +2,15 @@ name = "zhenghuoju-backend"
 main = "src/index.ts"
 compatibility_date = "2023-10-30"
 
-# R2 Bucket Binding
-# [[r2_buckets]]
-# binding = "BUCKET"
-# bucket_name = "zhenghuoju-images"
+routes = [
+  { pattern = "zhenghuo.miaogou.site", custom_domain = true }
+]
 
-# D1 Database Binding
-# [[d1_databases]]
-# binding = "DB"
-# database_name = "zhenghuoju-db"
-# database_id = "your-database-id-here"
+[[d1_databases]]
+binding = "DB"
+database_name = "zhenghuoju-db"
+database_id = "4c2bdb28-3cc1-4a41-bed1-c7eef44e1748"
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "zhenghuoju-images"

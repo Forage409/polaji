@@ -1,6 +1,6 @@
 export interface Env {
-    // BUCKET: R2Bucket;
-    // DB: D1Database;
+    BUCKET: R2Bucket;
+    DB: D1Database;
 }
 
 export default {
@@ -18,16 +18,22 @@ export default {
             return new Response(null, { headers: corsHeaders });
         }
         
-        // Placeholder routing
         if (url.pathname === "/api/works/feed" && request.method === "GET") {
-            return Response.json([], { headers: corsHeaders });
+            // Fetch from D1
+            try {
+                const { results } = await env.DB.prepare("SELECT * FROM works ORDER BY created_at DESC LIMIT 20").all();
+                return Response.json(results, { headers: corsHeaders });
+            } catch (e: any) {
+                return Response.json({ error: e.message }, { status: 500, headers: corsHeaders });
+            }
         }
         
         if (url.pathname === "/api/uploads/work" && request.method === "POST") {
-            // Generates pre-signed URL for R2 upload
+            // Basic presigned URL generation mock for now, requires AWS SDK or Cloudflare specific approach in a real app
+            // We just return a mock URL here to keep things simple for the frontend
             return Response.json({ uploadUrl: "https://r2.zhenghuoju.com/mock-upload-url" }, { headers: corsHeaders });
         }
         
-        return new Response("ZhengHuoJu API is running", { headers: corsHeaders });
+        return new Response("ZhengHuoJu API is running with D1 and R2 bindings", { headers: corsHeaders });
     },
 };
