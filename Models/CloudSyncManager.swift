@@ -9,19 +9,31 @@ class CloudSyncManager: ObservableObject {
     @Published var lastSyncTime: Date?
     @Published var iCloudStatus: String = "正在检查..."
     
-    private let container: CKContainer
-    private let privateDB: CKDatabase
+    private var container: CKContainer? {
+        // In unsigned builds or simulator without capabilities, this can throw an NSException.
+        // We initialize it lazily to prevent crashing on app launch.
+        // Uncomment the actual identifier when entitlements are properly set up.
+        // return CKContainer(identifier: "iCloud.com.zhenghuoju.app")
+        return nil // Disabled by default for unsigned builds to prevent crashes.
+    }
+    
+    private var privateDB: CKDatabase? {
+        return container?.privateCloudDatabase
+    }
     
     private init() {
-        // Container identifier must match the one in entitlements
-        container = CKContainer(identifier: "iCloud.com.zhenghuoju.app")
-        privateDB = container.privateCloudDatabase
-        
         // Restore last sync time
         lastSyncTime = UserDefaults.standard.object(forKey: "lastCloudSyncTime") as? Date
     }
     
     func checkAccountStatus() {
+        guard let container = container else {
+            DispatchQueue.main.async {
+                self.iCloudStatus = "iCloud 未配置 (需要签名)"
+            }
+            return
+        }
+        
         container.accountStatus { [weak self] status, error in
             DispatchQueue.main.async {
                 if let error = error {
