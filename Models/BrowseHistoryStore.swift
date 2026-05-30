@@ -63,6 +63,7 @@ final class BrowseHistoryStore: ObservableObject {
         encoder.dateEncodingStrategy = .secondsSince1970
         if let data = try? encoder.encode(entries) {
             UserDefaults.standard.set(data, forKey: historyKey)
+            UserDefaults.standard.synchronize()
         }
     }
 }

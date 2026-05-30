@@ -9,6 +9,7 @@ struct ResultView: View {
     @Environment(\.presentationMode) var presentationMode
     @State private var showingAlert = false
     @State private var alertMessage = ""
+    @State private var showingPublishSheet = false
     
     init(template: Template, inputs: [String: String]) {
         self.template = template
@@ -61,6 +62,18 @@ struct ResultView: View {
                 }
                 
                 Button(action: {
+                    showingPublishSheet = true
+                }) {
+                    Text("发布到广场")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.themePrimary)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 50)
+                        .background(Color.themePrimary.opacity(0.1))
+                        .cornerRadius(25)
+                }
+                
+                Button(action: {
                     presentationMode.wrappedValue.dismiss()
                 }) {
                     Text("返回修改")
@@ -80,13 +93,19 @@ struct ResultView: View {
                 generateCard()
             }
         }
-        .alert(isPresented: $showingAlert) {
-            Alert(title: Text("提示"), message: Text(alertMessage), dismissButton: .default(Text("确定")))
+        .toast(isPresented: $showingAlert, message: alertMessage)
+        .sheet(isPresented: $showingPublishSheet) {
+            if let card = generatedCard, let img = getRenderedImage() {
+                PublishWorkView(template: template, card: card, image: img)
+            }
         }
     }
     
     private func generateCard() {
         generatedCard = CardGenerator.shared.generate(templateId: template.id, inputs: currentInputs)
+        if generatedCard != nil {
+            RemoteTemplateService.shared.sendTemplateEvent(templateId: template.id, eventType: "template_generate")
+        }
     }
     
     private func changeTone() {
@@ -103,8 +122,7 @@ struct ResultView: View {
         guard let card = generatedCard else { return nil }
         let isVip = VipManager.shared.isVip
         let uiView = ResultCardUI(card: card, exportMode: true, showWatermark: !isVip)
-        let height: CGFloat = !isVip ? 560 : 520
-        return ImageExportManager.shared.renderImage(from: uiView, size: CGSize(width: 350, height: height))
+        return ImageExportManager.shared.renderImage(from: uiView, width: 350)
     }
     
     private func saveImageAndWork() {
@@ -129,5 +147,6 @@ struct ResultView: View {
     private func shareImage() {
         guard let image = getRenderedImage() else { return }
         ImageExportManager.shared.shareImage(image)
+        RemoteTemplateService.shared.sendTemplateEvent(templateId: template.id, eventType: "template_share")
     }
 }

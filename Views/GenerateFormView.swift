@@ -12,6 +12,7 @@ struct GenerateFormView: View {
     @State private var singleSelect1: String = ""
     @State private var singleSelect2: String = ""
     @State private var tone: String = ""
+    @State private var customQuote: String = ""
     
     @State private var participants: [String] = ["", "", ""]
     
@@ -49,9 +50,7 @@ struct GenerateFormView: View {
         .navigationTitle("填写信息")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { setDefaultValues() }
-        .alert(isPresented: $showAlert) {
-            Alert(title: Text("提示"), message: Text(alertMessage), dismissButton: .default(Text("确定")))
-        }
+        .toast(isPresented: $showAlert, message: alertMessage)
         .background(
             NavigationLink(destination: ResultView(template: template, inputs: buildInputs()), isActive: $navigateToResult) {
                 EmptyView()
@@ -82,6 +81,7 @@ struct GenerateFormView: View {
         inputs["singleSelect1"] = singleSelect1
         inputs["singleSelect2"] = singleSelect2
         inputs["tone"] = tone
+        inputs["customQuote"] = customQuote
         inputs["participants"] = participants.filter({ !$0.isEmpty }).joined(separator: ",")
         return inputs
     }
@@ -164,6 +164,43 @@ struct GenerateFormView: View {
         default:
             inputGroup(title: "TA的昵称") { TextField("请输入昵称", text: $nickname) }
             singleSelectGroup(title: "生成语气", options: ["可爱夸夸", "毒舌吐槽", "正经鉴定"], selection: $tone)
+        }
+        
+        // Custom Quote Section
+        if VipManager.shared.isVip {
+            inputGroup(title: "自定义文案 (VIP专属)") {
+                TextField("选填，将替换默认生成的文案", text: $customQuote)
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Image.bundle("vip_icon")
+                        .resizable()
+                        .frame(width: 16, height: 16)
+                    Text("自定义文案 (VIP专属)")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(.themeTextMain)
+                }
+                HStack {
+                    Text("开通 VIP 即可随意定制专属文案内容")
+                        .font(.system(size: 13))
+                        .foregroundColor(.themeTextSecondary)
+                    Spacer()
+                    NavigationLink(destination: PayWallView()) {
+                        Text("去开通")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(.themeTextMain)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.themePrimary)
+                            .cornerRadius(12)
+                    }
+                }
+                .padding()
+                .background(Color.white)
+                .cornerRadius(12)
+                .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
+            }
         }
     }
     

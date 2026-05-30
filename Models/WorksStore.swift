@@ -35,6 +35,7 @@ class WorksStore: ObservableObject {
     private func persistWorks() {
         if let encoded = try? JSONEncoder().encode(works) {
             UserDefaults.standard.set(encoded, forKey: worksKey)
+            UserDefaults.standard.synchronize()
         }
     }
 }

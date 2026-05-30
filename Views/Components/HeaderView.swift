@@ -32,18 +32,18 @@ struct HeaderView: View {
             HStack(spacing: 4) {
                 NavigationLink(destination: PayWallView()) {
                     ZStack {
-                        RoundedRectangle(cornerRadius: 22)
+                        RoundedRectangle(cornerRadius: 16)
                             .fill(vip.isVip ? Color.themePrimary : Color.themePrimary.opacity(0.22))
-                            .frame(width: 80, height: 44)
+                            .frame(width: 70, height: 32)
                         HStack(spacing: 4) {
                             Image.bundle("vip_icon")
                                 .resizable()
                                 .scaledToFit()
-                                .frame(width: 24, height: 24)
+                                .frame(width: 18, height: 18)
                                 .grayscale(vip.isVip ? 0.0 : 0.55)
                                 .opacity(vip.isVip ? 1.0 : 0.85)
                             Text("VIP")
-                                .font(.system(size: 14, weight: .heavy))
+                                .font(.system(size: 13, weight: .heavy))
                                 .foregroundColor(.themeTextMain)
                         }
                     }

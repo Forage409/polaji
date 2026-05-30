@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
  
 struct EditProfileView: View {
     @ObservedObject private var profile = UserProfileStore.shared
@@ -8,6 +9,7 @@ struct EditProfileView: View {
     @State private var draftBio: String = ""
     @State private var draftAvatar: String = "logo"
     @State private var showCopied = false
+    @State private var selectedItem: PhotosPickerItem? = nil
     
     private let avatarOptions: [String] = [
         "logo", "banner_character",
@@ -70,23 +72,41 @@ struct EditProfileView: View {
             draftBio = profile.bio
             draftAvatar = profile.avatarName
         }
-        .alert("ID 已复制", isPresented: $showCopied) {
-            Button("好的", role: .cancel) {}
-        }
+        .toast(isPresented: $showCopied, message: "ID 已复制")
     }
     
     private var avatarSection: some View {
-        VStack(spacing: 10) {
-            Image.bundle(draftAvatar)
-                .resizable()
-                .scaledToFill()
-                .frame(width: 96, height: 96)
-                .background(Color.white)
-                .clipShape(Circle())
-                .overlay(Circle().stroke(Color.white, lineWidth: 4))
-                .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 4)
+        VStack(spacing: 16) {
+            ZStack(alignment: .bottomTrailing) {
+                AvatarImage(name: draftAvatar)
+                    .scaledToFill()
+                    .frame(width: 96, height: 96)
+                    .clipShape(Circle())
+                
+                PhotosPicker(selection: $selectedItem, matching: .images) {
+                    Image(systemName: "camera.circle.fill")
+                        .resizable()
+                        .frame(width: 28, height: 28)
+                        .foregroundColor(.themePrimary)
+                        .background(Color.white)
+                        .clipShape(Circle())
+                }
+                .onChange(of: selectedItem) { newItem in
+                    Task {
+                        if let data = try? await newItem?.loadTransferable(type: Data.self),
+                           let image = UIImage(data: data) {
+                            let fileName = "custom_\(UUID().uuidString).jpg"
+                            if let _ = ImageExportManager.shared.saveImageToDocuments(image, fileName: fileName) {
+                                await MainActor.run {
+                                    draftAvatar = fileName
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             
-            Text("选择头像")
+            Text("选择头像或从相册上传")
                 .font(.system(size: 12, weight: .bold))
                 .foregroundColor(.themeTextSecondary)
             
@@ -94,11 +114,9 @@ struct EditProfileView: View {
                 HStack(spacing: 12) {
                     ForEach(avatarOptions, id: \.self) { name in
                         Button(action: { draftAvatar = name }) {
-                            Image.bundle(name)
-                                .resizable()
+                            AvatarImage(name: name)
                                 .scaledToFill()
                                 .frame(width: 56, height: 56)
-                                .background(Color.white)
                                 .clipShape(Circle())
                                 .overlay(
                                     Circle()

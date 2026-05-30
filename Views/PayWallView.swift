@@ -127,7 +127,7 @@ struct PayWallView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .padding(14)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .background(Color.white)
                     .cornerRadius(14)
                     .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 2)

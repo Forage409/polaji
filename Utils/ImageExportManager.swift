@@ -4,12 +4,12 @@ class ImageExportManager {
     static let shared = ImageExportManager()
     
     @MainActor
-    func renderImage<V: View>(from view: V, size: CGSize) -> UIImage? {
+    func renderImage<V: View>(from view: V, width: CGFloat) -> UIImage? {
         let exportView = ZStack {
             Color.white
             view
         }
-        .frame(width: size.width, height: size.height)
+        .frame(width: width)
         
         let renderer = ImageRenderer(content: exportView)
         renderer.scale = UIScreen.main.scale
@@ -18,9 +18,9 @@ class ImageExportManager {
     }
     
     @MainActor
-    func renderPNG<V: View>(from view: V, size: CGSize) -> Data? {
+    func renderPNG<V: View>(from view: V, width: CGFloat) -> Data? {
         let exportView = view
-            .frame(width: size.width, height: size.height)
+            .frame(width: width)
         let renderer = ImageRenderer(content: exportView)
         renderer.scale = UIScreen.main.scale
         renderer.isOpaque = false
@@ -40,11 +40,30 @@ class ImageExportManager {
         let fileURL = documentDirectory.appendingPathComponent(fileName)
         do {
             try data.write(to: fileURL)
-            return fileURL.path
+            return fileName // Return relative path instead of absolute path
         } catch {
             print("Error saving image to documents: \(error)")
             return nil
         }
+    }
+    
+    func loadImage(from path: String) -> UIImage? {
+        // Support legacy absolute paths (though they break on restart)
+        if path.starts(with: "/") || path.starts(with: "file://") {
+            return UIImage(contentsOfFile: path)
+        }
+        
+        // Check Document Directory (new format: relative paths)
+        let urls = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+        if let documentDirectory = urls.first {
+            let fileURL = documentDirectory.appendingPathComponent(path)
+            if let image = UIImage(contentsOfFile: fileURL.path) {
+                return image
+            }
+        }
+        
+        // Fallback to asset catalog
+        return UIImage(named: path.replacingOccurrences(of: ".png", with: ""))
     }
     
     func shareImage(_ image: UIImage, from sourceView: UIView? = nil) {

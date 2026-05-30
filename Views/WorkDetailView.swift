@@ -73,16 +73,10 @@ struct WorkDetailView: View {
         .background(Color.themeBackground.edgesIgnoringSafeArea(.all))
         .navigationTitle(work.title)
         .navigationBarTitleDisplayMode(.inline)
-        .alert(isPresented: $showingAlert) {
-            Alert(title: Text("提示"), message: Text(alertMessage), dismissButton: .default(Text("确定")))
-        }
+        .toast(isPresented: $showingAlert, message: alertMessage)
     }
     
     private func loadImage() -> UIImage? {
-        if work.imagePath.starts(with: "/") || work.imagePath.starts(with: "file://") {
-            return UIImage(contentsOfFile: work.imagePath)
-        } else {
-            return UIImage(named: work.imagePath.replacingOccurrences(of: ".png", with: ""))
-        }
+        return ImageExportManager.shared.loadImage(from: work.imagePath)
     }
 }

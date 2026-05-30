@@ -245,6 +245,10 @@ class CardGenerator {
             evidenceList = Array(personaEvidence.shuffled().prefix(3))
         }
         
+        if let customQuote = inputs["customQuote"], !customQuote.trimmingCharacters(in: .whitespaces).isEmpty {
+            quote = customQuote
+        }
+        
         return GeneratedCard(
             id: id,
             templateId: templateId,

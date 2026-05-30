@@ -1,0 +1,14 @@
+name = "zhenghuoju-backend"
+main = "src/index.ts"
+compatibility_date = "2023-10-30"
+
+# R2 Bucket Binding
+# [[r2_buckets]]
+# binding = "BUCKET"
+# bucket_name = "zhenghuoju-images"
+
+# D1 Database Binding
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "zhenghuoju-db"
+# database_id = "your-database-id-here"

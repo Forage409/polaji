@@ -125,8 +125,8 @@ struct DiscoverView: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: 140)
-                .opacity(0.45)
-                .offset(x: 110, y: -10)
+                .opacity(0.8)
+                .offset(x: 100, y: 10)
             
             VStack(alignment: .leading, spacing: 8) {
                 Text(item.badge)
@@ -220,6 +220,8 @@ struct DiscoverView: View {
                         Text("\(formatCount(item.usageCount)) 人生成")
                             .font(.system(size: 11))
                             .foregroundColor(.themeTextSecondary)
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
                     }
                 }
             }

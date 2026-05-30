@@ -1,0 +1,3402 @@
+Showing changes from 10:07 – 10:20 AM
+Clear filter
+ContentView.swift
+polaji
++54
+−20
+BrowseHistoryStore.swift
+Models · polaji
++68
+MockData.swift
+Models · polaji
++9
+UserProfileStore.swift
+Models · polaji
++50
+VipManager.swift
+Models · polaji
++64
+WorksStore.swift
+Models · polaji
++2
+CacheManager.swift
+Utils · polaji
++58
+ImageExportManager.swift
+Utils · polaji
++13
+−6
+CustomTabView.swift
+Views/Components · polaji
++7
+−6
+HeaderView.swift
+Views/Components · polaji
++46
+−29
+ResultCardUI.swift
+Views/Components · polaji
++76
+−58
+DiscoverView.swift
+Views · polaji
++251
+HomeView.swift
+Views · polaji
++20
+−18
+MyWorksView.swift
+Views · polaji
++292
+PayWallView.swift
+Views · polaji
++260
+BrowseHistoryView.swift
+Views/Profile · polaji
++125
+EditProfileView.swift
+Views/Profile · polaji
++169
+FeedbackView.swift
+Views/Profile · polaji
++196
+InviteCodeView.swift
+Views/Profile · polaji
++98
+MyOrdersView.swift
+Views/Profile · polaji
++131
+ProfileView.swift
+Views/Profile · polaji
++267
+ResultView.swift
+Views · polaji
++5
+−3
+AboutView.swift
+Views/Settings · polaji
++108
+LegalDocView.swift
+Views/Settings · polaji
++109
+NotificationSettingsView.swift
+Views/Settings · polaji
++196
+SettingsView.swift
+Views/Settings · polaji
++185
+TemplateDetailView.swift
+Views · polaji
++3
+WorkDetailView.swift
+Views · polaji
++1
+−1
+
+ContentView.swift
+polaji
+
++54
+−20
+import SwiftUI
+ 
+struct ContentView: View {
+    @State private var selectedTab = 0
+    @State private var showCreateDialog = false
+    @State private var createTemplate: Template?
+    
+    var body: some View {
+        NavigationStack {
+            ZStack(alignment: .bottom) {
+                TabView(selection: $selectedTab) {
+                    HomeView()
+                        .tag(0)
+                    
+                    Text("发现页")
+                        .tag(1)
+                    
+                    TemplatesView()
+                        .tag(2)
+                    
+                    Text("我的")
+                        .tag(3)
+                }
+                .onAppear {
+                    UITabBar.appearance().isHidden = true
+                }
+        ZStack(alignment: .bottom) {
+            TabView(selection: $selectedTab) {
+                HomeView()
+                    .tag(0)
+                
+                CustomTabView(selectedTab: $selectedTab)
+                DiscoverView()
+                    .tag(1)
+                
+                TemplatesView()
+                    .tag(2)
+                
+                ProfileView()
+                    .tag(3)
+            }
+            .edgesIgnoringSafeArea(.bottom)
+            .onAppear {
+                UITabBar.appearance().isHidden = true
+            }
+            
+            CustomTabView(selectedTab: $selectedTab, onCreateTap: {
+                showCreateDialog = true
+            })
+        }
+        .edgesIgnoringSafeArea(.bottom)
+        .confirmationDialog(
+            "选择一个整活玩法",
+            isPresented: $showCreateDialog,
+            titleVisibility: .visible
+        ) {
+            ForEach(MockData.quickCreateTemplates) { tpl in
+                Button(tpl.name) {
+                    createTemplate = tpl
+                }
+            }
+            Button("查看全部模板") {
+                selectedTab = 2
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("选好之后填写信息，点击「开始生成」即可产出图片。")
+        }
+        .sheet(item: $createTemplate) { tpl in
+            NavigationStack {
+                GenerateFormView(template: tpl)
+                    .navigationTitle(tpl.name)
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarLeading) {
+                            Button("关闭") {
+                                createTemplate = nil
+                            }
+                            .foregroundColor(.themeTextMain)
+                        }
+                    }
+            }
+        }
+    }
+}
+
+BrowseHistoryStore.swift
+Models · polaji
+
++68
+Added
+import Foundation
+import Combine
+ 
+struct BrowseHistoryEntry: Codable, Identifiable, Hashable {
+    let id: String
+    let templateId: String
+    let templateName: String
+    let coverImage: String
+    let category: String
+    let visitedAt: Date
+}
+ 
+final class BrowseHistoryStore: ObservableObject {
+    static let shared = BrowseHistoryStore()
+    
+    private let historyKey = "ZhengHuoJu_BrowseHistory"
+    private let maxEntries = 50
+    
+    @Published var entries: [BrowseHistoryEntry] = []
+    
+    private init() {
+        load()
+    }
+    
+    func record(template: Template) {
+        let entry = BrowseHistoryEntry(
+            id: UUID().uuidString,
+            templateId: template.id,
+            templateName: template.name,
+            coverImage: template.coverImage,
+            category: template.category,
+            visitedAt: Date()
+        )
+        entries.removeAll { $0.templateId == template.id }
+        entries.insert(entry, at: 0)
+        if entries.count > maxEntries {
+            entries = Array(entries.prefix(maxEntries))
+        }
+        persist()
+    }
+    
+    func clear() {
+        entries = []
+        persist()
+    }
+    
+    func remove(id: String) {
+        entries.removeAll { $0.id == id }
+        persist()
+    }
+    
+    private func load() {
+        guard let data = UserDefaults.standard.data(forKey: historyKey) else { return }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .secondsSince1970
+        if let decoded = try? decoder.decode([BrowseHistoryEntry].self, from: data) {
+            self.entries = decoded
+        }
+    }
+    
+    private func persist() {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .secondsSince1970
+        if let data = try? encoder.encode(entries) {
+            UserDefaults.standard.set(data, forKey: historyKey)
+        }
+    }
+}
+
+MockData.swift
+Models · polaji
+
++9
+    }
+    
+    static var recentWorks: [Work] = []
+    
+    static func template(id: String) -> Template? {
+        allTemplates.first(where: { $0.id == id })
+    }
+    
+    static var quickCreateTemplates: [Template] {
+        ["persona_card", "group_judge", "friend_vote", "truth_dare"]
+            .compactMap { template(id: $0) }
+    }
+}
+
+UserProfileStore.swift
+Models · polaji
+
++50
+Added
+import Foundation
+import Combine
+ 
+final class UserProfileStore: ObservableObject {
+    static let shared = UserProfileStore()
+    
+    private let nicknameKey = "ZhengHuoJu_Profile_Nickname"
+    private let userIdKey = "ZhengHuoJu_Profile_UserId"
+    private let bioKey = "ZhengHuoJu_Profile_Bio"
+    private let avatarNameKey = "ZhengHuoJu_Profile_AvatarName"
+    
+    @Published var nickname: String {
+        didSet { UserDefaults.standard.set(nickname, forKey: nicknameKey) }
+    }
+    
+    @Published var userId: String {
+        didSet { UserDefaults.standard.set(userId, forKey: userIdKey) }
+    }
+    
+    @Published var bio: String {
+        didSet { UserDefaults.standard.set(bio, forKey: bioKey) }
+    }
+    
+    @Published var avatarName: String {
+        didSet { UserDefaults.standard.set(avatarName, forKey: avatarNameKey) }
+    }
+    
+    private init() {
+        let defaults = UserDefaults.standard
+        self.nickname = defaults.string(forKey: nicknameKey) ?? "整活新人"
+        if let existing = defaults.string(forKey: userIdKey), !existing.isEmpty {
+            self.userId = existing
+        } else {
+            let generated = UserProfileStore.generateUserId()
+            defaults.set(generated, forKey: userIdKey)
+            self.userId = generated
+        }
+        self.bio = defaults.string(forKey: bioKey) ?? "和朋友一起整活，好玩又有梗 ✨"
+        self.avatarName = defaults.string(forKey: avatarNameKey) ?? "logo"
+    }
+    
+    private static func generateUserId() -> String {
+        let digits = (0..<8).map { _ in String(Int.random(in: 0...9)) }.joined()
+        return digits
+    }
+    
+    func resetIdForDebug() {
+        userId = UserProfileStore.generateUserId()
+    }
+}
+
+VipManager.swift
+Models · polaji
+
++64
+Added
+import Foundation
+import Combine
+ 
+final class VipManager: ObservableObject {
+    static let shared = VipManager()
+    
+    private let isVipKey = "ZhengHuoJu_IsVip"
+    private let vipExpiryKey = "ZhengHuoJu_VipExpiry"
+    private let vipPlanKey = "ZhengHuoJu_VipPlan"
+    
+    @Published var isVip: Bool {
+        didSet { UserDefaults.standard.set(isVip, forKey: isVipKey) }
+    }
+    
+    @Published var planName: String {
+        didSet { UserDefaults.standard.set(planName, forKey: vipPlanKey) }
+    }
+    
+    @Published var expiryDate: Date? {
+        didSet {
+            if let date = expiryDate {
+                UserDefaults.standard.set(date.timeIntervalSince1970, forKey: vipExpiryKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: vipExpiryKey)
+            }
+        }
+    }
+    
+    private init() {
+        self.isVip = UserDefaults.standard.bool(forKey: isVipKey)
+        self.planName = UserDefaults.standard.string(forKey: vipPlanKey) ?? ""
+        let ts = UserDefaults.standard.double(forKey: vipExpiryKey)
+        self.expiryDate = ts > 0 ? Date(timeIntervalSince1970: ts) : nil
+    }
+    
+    func activate(plan: String, expiry: Date?) {
+        planName = plan
+        expiryDate = expiry
+        isVip = true
+    }
+    
+    func deactivate() {
+        isVip = false
+        planName = ""
+        expiryDate = nil
+    }
+    
+    func toggleForDebug() {
+        if isVip {
+            deactivate()
+        } else {
+            activate(plan: "调试 VIP", expiry: nil)
+        }
+    }
+    
+    var expiryDisplay: String {
+        if let date = expiryDate {
+            let f = DateFormatter()
+            f.dateFormat = "yyyy.MM.dd 到期"
+            return f.string(from: date)
+        }
+        return "永久会员"
+    }
+}
+
+WorksStore.swift
+Models · polaji
+
++2
+import Foundation
+ 
+class WorksStore: ObservableObject {
+    static let shared = WorksStore()
+    
+    @Published var works: [Work] = []
+    
+    private let worksKey = "ZhengHuoJu_Works_Metadata"
+
+CacheManager.swift
+Utils · polaji
+
++58
+Added
+import Foundation
+ 
+enum CacheManager {
+    static func computeCacheSize() -> Int64 {
+        var total: Int64 = 0
+        let manager = FileManager.default
+        let candidateDirs: [URL] = {
+            var urls: [URL] = []
+            urls.append(contentsOf: manager.urls(for: .cachesDirectory, in: .userDomainMask))
+            let tmp = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            urls.append(tmp)
+            return urls
+        }()
+        
+        for dir in candidateDirs {
+            total += directorySize(at: dir)
+        }
+        return total
+    }
+    
+    static func clearCache() {
+        let manager = FileManager.default
+        var dirs: [URL] = []
+        dirs.append(contentsOf: manager.urls(for: .cachesDirectory, in: .userDomainMask))
+        dirs.append(URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true))
+        
+        for dir in dirs {
+            guard let contents = try? manager.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) else { continue }
+            for url in contents {
+                try? manager.removeItem(at: url)
+            }
+        }
+    }
+    
+    static func formatBytes(_ bytes: Int64) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useKB, .useMB, .useGB]
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: bytes)
+    }
+    
+    private static func directorySize(at url: URL) -> Int64 {
+        let manager = FileManager.default
+        guard let enumerator = manager.enumerator(at: url, includingPropertiesForKeys: [.totalFileAllocatedSizeKey, .fileAllocatedSizeKey]) else {
+            return 0
+        }
+        var size: Int64 = 0
+        for case let fileURL as URL in enumerator {
+            let values = try? fileURL.resourceValues(forKeys: [.totalFileAllocatedSizeKey, .fileAllocatedSizeKey])
+            if let total = values?.totalFileAllocatedSize {
+                size += Int64(total)
+            } else if let alloc = values?.fileAllocatedSize {
+                size += Int64(alloc)
+            }
+        }
+        return size
+    }
+}
+
+ImageExportManager.swift
+Utils · polaji
+
++13
+−6
+import SwiftUI
+ 
+class ImageExportManager {
+    static let shared = ImageExportManager()
+    
+    @MainActor
+    func renderImage<V: View>(from view: V, size: CGSize) -> UIImage? {
+        let exportView = ZStack {
+            Color.white
+            view
+        }
+        .frame(width: size.width, height: size.height)
+        
+        let exportView = view
+            .frame(width: size.width, height: size.height)
+        let renderer = ImageRenderer(content: exportView)
+        renderer.scale = UIScreen.main.scale
+        renderer.isOpaque = true
+        return renderer.uiImage
+    }
+    
+    @MainActor
+    func renderPNG<V: View>(from view: V, size: CGSize) -> Data? {
+        let exportView = view
+            .frame(width: size.width, height: size.height)
+        let renderer = ImageRenderer(content: exportView)
+        renderer.scale = UIScreen.main.scale
+        renderer.isOpaque = false
+        return renderer.uiImage?.pngData()
+    }
+    
+    func saveImageToPhotos(_ image: UIImage, completion: @escaping (Bool) -> Void) {
+        let saver = ImageSaver(completion: completion)
+        saver.writeToPhotoAlbum(image: image)
+
+CustomTabView.swift
+Views/Components · polaji
+
++7
+−6
+import SwiftUI
+ 
+struct CustomTabView: View {
+    @Binding var selectedTab: Int
+    var onCreateTap: () -> Void
+    
+    var body: some View {
+        HStack {
+            
+            Spacer()
+            
+            // Create Button
+            Button(action: {
+                selectedTab = 2 // Redirects to templates for now
+            }) {
+            Button(action: onCreateTap) {
+                ZStack {
+                    Circle()
+                        .fill(Color.themePrimary)
+                        .frame(width: 56, height: 56)
+                        .shadow(color: Color.themePrimary.opacity(0.35), radius: 8, x: 0, y: 4)
+                    
+                    Image.bundle("tab_create")
+                        .resizable()
+                }
+                .offset(y: -15)
+            }
+            .buttonStyle(PlainButtonStyle())
+            
+            Spacer()
+            
+                    .foregroundColor(isSelected ? .themePrimary : .gray)
+                
+                Text(title)
+                    .font(.system(size: 10))
+                    .foregroundColor(isSelected ? .themePrimary : .gray)
+                    .font(.system(size: 10, weight: isSelected ? .bold : .regular))
+                    .foregroundColor(isSelected ? .themeTextMain : .themeTextSecondary)
+            }
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
+HeaderView.swift
+Views/Components · polaji
+
++46
+−29
+import SwiftUI
+ 
+struct HeaderView: View {
+    @State private var isVip = false
+    var title: String = "整活局"
+    var titleSuffix: String? = nil
+    var showLogo: Bool = true
+    
+    @ObservedObject private var vip = VipManager.shared
+    
+    var body: some View {
+        HStack {
+        HStack(spacing: 12) {
+            HStack(spacing: 8) {
+                Text("整活局")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                Text(title)
+                    .font(.system(size: 24, weight: .heavy))
+                    .foregroundColor(.themeTextMain)
+                Image.bundle("logo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 24, height: 24)
+                if showLogo {
+                    Image.bundle("logo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 28, height: 28)
+                }
+                if let suffix = titleSuffix {
+                    Text(suffix)
+                        .font(.system(size: 22))
+                }
+            }
+            
+            Spacer()
+            
+            HStack(spacing: 4) {
+                Button(action: {
+                    #if DEBUG
+                    isVip.toggle()
+                    #endif
+                }) {
+                    Image.bundle("vip_icon")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(height: 32)
+                        .grayscale(isVip ? 0.0 : 1.0)
+                        .opacity(isVip ? 1.0 : 0.6)
+            NavigationLink(destination: PayWallView()) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 22)
+                        .fill(vip.isVip ? Color.themePrimary : Color.themePrimary.opacity(0.22))
+                        .frame(width: 80, height: 44)
+                    HStack(spacing: 4) {
+                        Image.bundle("vip_icon")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 24, height: 24)
+                            .grayscale(vip.isVip ? 0.0 : 0.55)
+                            .opacity(vip.isVip ? 1.0 : 0.85)
+                        Text("VIP")
+                            .font(.system(size: 14, weight: .heavy))
+                            .foregroundColor(.themeTextMain)
+                    }
+                }
+                
+                Button(action: {
+                    // Settings action
+                }) {
+            }
+            .buttonStyle(PlainButtonStyle())
+            
+            NavigationLink(destination: SettingsView()) {
+                ZStack {
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: 44, height: 44)
+                        .shadow(color: .black.opacity(0.06), radius: 4, x: 0, y: 2)
+                    Image.bundle("settings_icon")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 28, height: 28)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                        .frame(width: 24, height: 24)
+                }
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+        .padding(.horizontal)
+        .padding(.horizontal, 20)
+        .padding(.top, 10)
+    }
+}
+
+ResultCardUI.swift
+Views/Components · polaji
+
++76
+−58
+import SwiftUI
+ 
+struct ResultCardUI: View {
+    let card: GeneratedCard
+    var exportMode: Bool = false
+    var showWatermark: Bool = false
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            ZStack(alignment: .topLeading) {
+                backgroundForType()
+        ZStack(alignment: .topLeading) {
+            backgroundForType()
+            
+            VStack(alignment: .leading, spacing: 16) {
+                // Header
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(card.title)
+                            .font(.system(size: 26, weight: .heavy))
+                            .foregroundColor(headerTextColor)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.7)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Text(card.subtitle)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(headerTextColor.opacity(0.82))
+                            .lineLimit(3)
+                            .minimumScaleFactor(0.85)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    Image.bundle("logo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 32, height: 32)
+                }
+                
+                VStack(alignment: .leading, spacing: 16) {
+                    // Header
+                    HStack(alignment: .top) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(card.title)
+                                .font(.system(size: 28, weight: .heavy))
+                                .foregroundColor(headerTextColor)
+                            Text(card.subtitle)
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundColor(headerTextColor.opacity(0.8))
+                        }
+                        Spacer()
+                        Image.bundle("logo")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 32, height: 32)
+                // Main Content Area based on Type
+                if card.templateType == "rank" {
+                    rankLayout()
+                } else if card.templateType == "verdict" {
+                    verdictLayout()
+                } else if card.templateType == "task" {
+                    taskLayout()
+                } else {
+                    diagnosticLayout()
+                }
+                
+                Spacer(minLength: 10)
+                
+                // Quote
+                if !card.quote.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(card.templateType == "task" ? "任务提示：" : (card.templateType == "verdict" ? "法官寄语：" : "今日宣言："))
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(headerTextColor.opacity(0.8))
+                        Text(card.quote)
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundColor(headerTextColor)
+                            .italic()
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    
+                    // Main Content Area based on Type
+                    if card.templateType == "rank" {
+                        rankLayout()
+                    } else if card.templateType == "verdict" {
+                        verdictLayout()
+                    } else if card.templateType == "task" {
+                        taskLayout()
+                    } else {
+                        diagnosticLayout()
+                    }
+                    
+                    Spacer(minLength: 10)
+                    
+                    // Quote
+                    if !card.quote.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(card.templateType == "task" ? "任务提示：" : (card.templateType == "verdict" ? "法官寄语：" : "今日宣言："))
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(headerTextColor.opacity(0.8))
+                            Text(card.quote)
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundColor(headerTextColor)
+                                .italic()
+                                .fixedSize(horizontal: false, vertical: true)
+                }
+                
+                // Footer
+                HStack(spacing: 6) {
+                    Text("内容仅供娱乐，切勿当真")
+                        .font(.system(size: 10))
+                        .foregroundColor(headerTextColor.opacity(0.5))
+                    Spacer()
+                    if showWatermark {
+                        HStack(spacing: 3) {
+                            Image.bundle("logo")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 12, height: 12)
+                            Text("整活局")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(headerTextColor.opacity(0.55))
+                        }
+                    }
+                    
+                    // Footer
+                    HStack {
+                        Text("内容仅供娱乐，切勿当真")
+                            .font(.system(size: 10))
+                            .foregroundColor(headerTextColor.opacity(0.5))
+                        Spacer()
+                        Text(card.createdAt)
+                            .font(.system(size: 10))
+                            .foregroundColor(headerTextColor.opacity(0.5))
+                    }
+                    Text(card.createdAt)
+                        .font(.system(size: 10))
+                        .foregroundColor(headerTextColor.opacity(0.5))
+                }
+                .padding(24)
+            }
+            .padding(24)
+        }
+        .frame(width: 350, height: 520, alignment: .top)
+        .cornerRadius(24)
+        .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
+        .cornerRadius(exportMode ? 0 : 24)
+        .shadow(color: exportMode ? .clear : .black.opacity(0.15), radius: exportMode ? 0 : 20, x: 0, y: exportMode ? 0 : 10)
+    }
+    
+    // MARK: - Layouts
+
+DiscoverView.swift
+Views · polaji
+
++251
+Added
+import SwiftUI
+ 
+struct DiscoverFeatureCard: Identifiable {
+    let id = UUID()
+    let templateId: String
+    let title: String
+    let subtitle: String
+    let bgImage: String
+    let badge: String
+    let gradient: [String]
+}
+ 
+struct DiscoverFeedItem: Identifiable {
+    let id = UUID()
+    let templateId: String
+    let title: String
+    let summary: String
+    let author: String
+    let usageCount: Int
+    let cover: String
+}
+ 
+struct DiscoverView: View {
+    private let featureCards: [DiscoverFeatureCard] = [
+        DiscoverFeatureCard(
+            templateId: "office_survival",
+            title: "当代打工人生存图鉴",
+            subtitle: "扎心又真实",
+            bgImage: "tpl_persona",
+            badge: "热门",
+            gradient: ["FFE070", "FFB300"]
+        ),
+        DiscoverFeatureCard(
+            templateId: "single_card",
+            title: "恋爱脑自测说明书",
+            subtitle: "看看你有多上头",
+            bgImage: "tpl_single",
+            badge: "上头",
+            gradient: ["FF8FA3", "FF6B8A"]
+        ),
+        DiscoverFeatureCard(
+            templateId: "persona_card",
+            title: "MBTI 性格盲盒",
+            subtitle: "测测你是哪种类型",
+            bgImage: "tpl_persona",
+            badge: "盲盒",
+            gradient: ["9C8EFF", "7B61FF"]
+        )
+    ]
+    
+    private let feedItems: [DiscoverFeedItem] = [
+        DiscoverFeedItem(templateId: "office_survival", title: "你的办公室生存指数有多高？", summary: "打工人必测，看看你能活几集！", author: "整活局小编", usageCount: 73000, cover: "tpl_persona"),
+        DiscoverFeedItem(templateId: "group_judge", title: "群聊判决书：谁该请奶茶？", summary: "群聊里翻车？一张判决书送你出道。", author: "梗王协会", usageCount: 58000, cover: "tpl_judge"),
+        DiscoverFeedItem(templateId: "rich_card", title: "谁是这群人里的隐藏富豪？", summary: "平时装穷的最有钱，不信投个票看看。", author: "财富鉴定中心", usageCount: 124000, cover: "tpl_rich"),
+        DiscoverFeedItem(templateId: "stay_up", title: "今晚谁修仙最厉害？", summary: "凌晨三点，朋友圈还在线的那个人是谁。", author: "夜猫子联盟", usageCount: 98000, cover: "tpl_stay_up"),
+        DiscoverFeedItem(templateId: "truth_dare", title: "真心话大冒险卡组", summary: "聚会神器，挑战完友谊还能不能续？", author: "派对策划师", usageCount: 41000, cover: "tpl_truth_dare"),
+        DiscoverFeedItem(templateId: "boss_card", title: "谁最有老板气质？", summary: "今天的画饼大王是哪位选手。", author: "工位日记", usageCount: 36000, cover: "tpl_boss")
+    ]
+    
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 18) {
+                    headerBar
+                    sectionTitle(title: "热门推荐", emoji: "🔥")
+                    featureSlider
+                    sectionTitle(title: "正在被疯转", emoji: "✨")
+                    feedList
+                    Spacer(minLength: 110)
+                }
+            }
+            .background(Color.themeBackground.edgesIgnoringSafeArea(.all))
+        }
+    }
+    
+    private var headerBar: some View {
+        HStack {
+            Text("发现")
+                .font(.system(size: 24, weight: .heavy))
+                .foregroundColor(.themeTextMain)
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 10)
+    }
+    
+    private func sectionTitle(title: String, emoji: String) -> some View {
+        HStack(spacing: 6) {
+            Text(emoji)
+            Text(title)
+                .font(.system(size: 17, weight: .heavy))
+                .foregroundColor(.themeTextMain)
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+    }
+    
+    private var featureSlider: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 14) {
+                ForEach(featureCards) { item in
+                    if let template = MockData.template(id: item.templateId) {
+                        NavigationLink(destination: TemplateDetailView(template: template)) {
+                            featureCard(item)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    } else {
+                        featureCard(item)
+                    }
+                }
+            }
+            .padding(.horizontal, 20)
+        }
+    }
+    
+    private func featureCard(_ item: DiscoverFeatureCard) -> some View {
+        ZStack(alignment: .bottomLeading) {
+            LinearGradient(
+                gradient: Gradient(colors: item.gradient.map { Color(hex: $0) }),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            
+            Image.bundle(item.bgImage)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 140)
+                .opacity(0.45)
+                .offset(x: 110, y: -10)
+            
+            VStack(alignment: .leading, spacing: 8) {
+                Text(item.badge)
+                    .font(.system(size: 10, weight: .heavy))
+                    .foregroundColor(.themeTextMain)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Color.white.opacity(0.85))
+                    .cornerRadius(8)
+                Spacer()
+                Text(item.title)
+                    .font(.system(size: 18, weight: .heavy))
+                    .foregroundColor(.white)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .shadow(color: .black.opacity(0.2), radius: 2, x: 0, y: 1)
+                Text(item.subtitle)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white.opacity(0.9))
+                    .lineLimit(1)
+                HStack(spacing: 4) {
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 10))
+                    Text("立即生成")
+                        .font(.system(size: 12, weight: .bold))
+                }
+                .foregroundColor(.themeTextMain)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Color.white)
+                .cornerRadius(14)
+            }
+            .padding(16)
+        }
+        .frame(width: 240, height: 200)
+        .cornerRadius(18)
+        .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
+    }
+    
+    private var feedList: some View {
+        VStack(spacing: 12) {
+            ForEach(feedItems) { item in
+                if let template = MockData.template(id: item.templateId) {
+                    NavigationLink(destination: TemplateDetailView(template: template)) {
+                        feedRow(item: item)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                } else {
+                    feedRow(item: item)
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+    }
+    
+    private func feedRow(item: DiscoverFeedItem) -> some View {
+        HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.gray.opacity(0.08))
+                    .frame(width: 88, height: 88)
+                Image.bundle(item.cover)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 88, height: 88)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+            
+            VStack(alignment: .leading, spacing: 6) {
+                Text(item.title)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.themeTextMain)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                Text(item.summary)
+                    .font(.system(size: 12))
+                    .foregroundColor(.themeTextSecondary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                Spacer(minLength: 2)
+                HStack(spacing: 6) {
+                    Text(item.author)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(Color(hex: "7B61FF"))
+                    Text("·")
+                        .foregroundColor(.themeTextSecondary)
+                    HStack(spacing: 3) {
+                        Image(systemName: "flame.fill")
+                            .font(.system(size: 9))
+                            .foregroundColor(Color(hex: "FF6B8A"))
+                        Text("\(formatCount(item.usageCount)) 人生成")
+                            .font(.system(size: 11))
+                            .foregroundColor(.themeTextSecondary)
+                    }
+                }
+            }
+            
+            Spacer()
+            
+            VStack {
+                Text("去生成")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.themeTextMain)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background(Color.themePrimary)
+                    .cornerRadius(14)
+            }
+        }
+        .padding(12)
+        .background(Color.white)
+        .cornerRadius(14)
+        .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 2)
+    }
+    
+    private func formatCount(_ count: Int) -> String {
+        if count >= 10000 {
+            return String(format: "%.1fw", Double(count) / 10000.0)
+        }
+        return "\(count)"
+    }
+}
+
+HomeView.swift
+Views · polaji
+
++20
+−18
+import SwiftUI
+ 
+struct HomeView: View {
+    @StateObject private var store = WorksStore()
+    @ObservedObject private var store = WorksStore.shared
+    
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: 24) {
+                HeaderView()
+                
+                MainBannerView()
+                
+                QuickActionsScrollView()
+                
+                HotTemplatesView(templates: MockData.hotTemplates)
+                
+                RecentWorksView(works: store.works)
+                
+                Spacer().frame(height: 80)
+        NavigationStack {
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 24) {
+                    HeaderView()
+                    
+                    MainBannerView()
+                    
+                    QuickActionsScrollView()
+                    
+                    HotTemplatesView(templates: MockData.hotTemplates)
+                    
+                    RecentWorksView(works: store.works)
+                    
+                    Spacer().frame(height: 80)
+                }
+            }
+            .background(Color.themeBackground.edgesIgnoringSafeArea(.all))
+            .onAppear {
+                store.refresh()
+            }
+        }
+        .background(Color.themeBackground.edgesIgnoringSafeArea(.all))
+        .onAppear {
+            store.refresh()
+        }
+    }
+}
+
+MyWorksView.swift
+Views · polaji
+
++292
+Added
+import SwiftUI
+ 
+struct MyWorksView: View {
+    @ObservedObject private var store = WorksStore.shared
+    @ObservedObject private var profile = UserProfileStore.shared
+    @State private var selectedCategory = "全部"
+    @State private var searchKeyword: String = ""
+    @State private var showSearch = false
+    
+    private let categories = ["全部", "人设卡", "判官", "投票", "趣味", "其他"]
+    
+    private var filteredWorks: [Work] {
+        var w = store.works
+        if selectedCategory != "全部" {
+            if selectedCategory == "其他" {
+                w = w.filter { !["人设卡", "判官", "投票", "趣味"].contains($0.category) }
+            } else {
+                w = w.filter { $0.category == selectedCategory }
+            }
+        }
+        if !searchKeyword.trimmingCharacters(in: .whitespaces).isEmpty {
+            let kw = searchKeyword.lowercased()
+            w = w.filter { $0.title.lowercased().contains(kw) }
+        }
+        return w
+    }
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            headerBar
+            if showSearch {
+                searchField
+            }
+            categoryStrip
+            
+            if filteredWorks.isEmpty {
+                emptyState
+            } else {
+                ScrollView {
+                    LazyVGrid(
+                        columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)],
+                        spacing: 12
+                    ) {
+                        ForEach(filteredWorks) { work in
+                            WorkCardCell(work: work) {
+                                store.deleteWork(id: work.id)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                    
+                    Text("已经到底啦 ~")
+                        .font(.system(size: 12))
+                        .foregroundColor(.themeTextSecondary)
+                        .padding(.vertical, 24)
+                }
+            }
+        }
+        .background(Color.themeBackground.edgesIgnoringSafeArea(.all))
+        .navigationBarHidden(true)
+    }
+    
+    private var headerBar: some View {
+        HStack(spacing: 12) {
+            Text("我的作品")
+                .font(.system(size: 22, weight: .heavy))
+                .foregroundColor(.themeTextMain)
+            Spacer()
+            Button(action: { withAnimation { showSearch.toggle() } }) {
+                ZStack {
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: 38, height: 38)
+                        .shadow(color: .black.opacity(0.05), radius: 3, x: 0, y: 2)
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.themeTextMain)
+                }
+            }
+            NavigationLink(destination: SettingsView()) {
+                ZStack {
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: 38, height: 38)
+                        .shadow(color: .black.opacity(0.05), radius: 3, x: 0, y: 2)
+                    Image.bundle("settings_icon")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 22, height: 22)
+                }
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 10)
+        .padding(.bottom, 10)
+    }
+    
+    private var searchField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .foregroundColor(.themeTextSecondary)
+            TextField("搜索作品标题", text: $searchKeyword)
+                .font(.system(size: 14))
+            if !searchKeyword.isEmpty {
+                Button(action: { searchKeyword = "" }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(.themeTextSecondary)
+                }
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(Color.white)
+        .cornerRadius(20)
+        .padding(.horizontal, 16)
+        .padding(.bottom, 10)
+    }
+    
+    private var categoryStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(categories, id: \.self) { c in
+                    Text(c)
+                        .font(.system(size: 13, weight: selectedCategory == c ? .bold : .medium))
+                        .foregroundColor(selectedCategory == c ? .themeTextMain : .themeTextSecondary)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(selectedCategory == c ? Color.themePrimary : Color.white)
+                        .cornerRadius(16)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(selectedCategory == c ? Color.themePrimary : Color.gray.opacity(0.12), lineWidth: 1)
+                        )
+                        .onTapGesture {
+                            withAnimation { selectedCategory = c }
+                        }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 4)
+        }
+        .padding(.bottom, 6)
+    }
+    
+    private var emptyState: some View {
+        VStack(spacing: 14) {
+            Spacer()
+            ZStack {
+                Circle()
+                    .fill(Color.themePrimary.opacity(0.15))
+                    .frame(width: 96, height: 96)
+                Image(systemName: "sparkles.rectangle.stack.fill")
+                    .font(.system(size: 36))
+                    .foregroundColor(Color(hex: "B58900"))
+            }
+            Text(searchKeyword.isEmpty ? "还没有作品" : "没有匹配的作品")
+                .font(.system(size: 18, weight: .heavy))
+                .foregroundColor(.themeTextMain)
+            Text(searchKeyword.isEmpty ? "去模板页选一个玩法，整一张专属卡片吧" : "试试其他关键词")
+                .font(.system(size: 13))
+                .foregroundColor(.themeTextSecondary)
+                .multilineTextAlignment(.center)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+ 
+struct WorkCardCell: View {
+    let work: Work
+    let onDelete: () -> Void
+    
+    @State private var showActions = false
+    @State private var showShareAlert = false
+    @State private var alertMessage = ""
+    @State private var showAlert = false
+    
+    var body: some View {
+        NavigationLink(destination: WorkDetailView(work: work)) {
+            ZStack(alignment: .topTrailing) {
+                VStack(alignment: .leading, spacing: 0) {
+                    ZStack(alignment: .topLeading) {
+                        if let uiImage = loadImage() {
+                            Image(uiImage: uiImage)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(height: 200)
+                                .clipped()
+                        } else {
+                            Image.bundle(coverPlaceholder())
+                                .resizable()
+                                .scaledToFill()
+                                .frame(height: 200)
+                                .clipped()
+                        }
+                        
+                        Text(work.category)
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.black.opacity(0.45))
+                            .cornerRadius(10)
+                            .padding(8)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(work.title)
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(.themeTextMain)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                        HStack(spacing: 4) {
+                            Image(systemName: "clock")
+                                .font(.system(size: 10))
+                                .foregroundColor(.themeTextSecondary)
+                            Text(work.createdAt)
+                                .font(.system(size: 11))
+                                .foregroundColor(.themeTextSecondary)
+                        }
+                    }
+                    .padding(12)
+                }
+                .background(Color.white)
+                .cornerRadius(14)
+                .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
+                
+                Button(action: { showActions = true }) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.white)
+                            .frame(width: 30, height: 30)
+                            .shadow(color: .black.opacity(0.1), radius: 3, x: 0, y: 1)
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(.themeTextMain)
+                    }
+                }
+                .buttonStyle(PlainButtonStyle())
+                .padding(8)
+                .offset(x: 0, y: 0)
+            }
+        }
+        .buttonStyle(PlainButtonStyle())
+        .confirmationDialog("作品操作", isPresented: $showActions, titleVisibility: .hidden) {
+            Button("保存图片", action: saveImage)
+            Button("再次分享", action: shareImage)
+            Button("删除作品", role: .destructive, action: onDelete)
+            Button("取消", role: .cancel) {}
+        }
+        .alert(isPresented: $showAlert) {
+            Alert(title: Text("提示"), message: Text(alertMessage), dismissButton: .default(Text("好的")))
+        }
+    }
+    
+    private func loadImage() -> UIImage? {
+        if work.imagePath.starts(with: "/") {
+            return UIImage(contentsOfFile: work.imagePath)
+        }
+        return nil
+    }
+    
+    private func coverPlaceholder() -> String {
+        if let t = MockData.template(id: work.templateId) {
+            return t.coverImage
+        }
+        return "cover_persona"
+    }
+    
+    private func saveImage() {
+        guard let img = loadImage() else {
+            alertMessage = "原始图片已丢失，无法保存"
+            showAlert = true
+            return
+        }
+        ImageExportManager.shared.saveImageToPhotos(img) { success in
+            alertMessage = success ? "已保存到系统相册！" : "保存失败，请检查相册权限"
+            showAlert = true
+        }
+    }
+    
+    private func shareImage() {
+        guard let img = loadImage() else {
+            alertMessage = "原始图片已丢失，无法分享"
+            showAlert = true
+            return
+        }
+        ImageExportManager.shared.shareImage(img)
+    }
+}
+
+PayWallView.swift
+Views · polaji
+
++260
+Added
+import SwiftUI
+ 
+struct PayWallPlan: Identifiable, Hashable {
+    let id: String
+    let title: String
+    let price: String
+    let originalPrice: String?
+    let badge: String?
+    let perDayHint: String?
+    let durationLabel: String
+    let highlight: Bool
+}
+ 
+struct PayWallView: View {
+    @ObservedObject private var vip = VipManager.shared
+    @Environment(\.presentationMode) var presentationMode
+    
+    @State private var selectedPlanId: String = "lifetime"
+    @State private var showPurchaseAlert = false
+    
+    private let plans: [PayWallPlan] = [
+        PayWallPlan(id: "monthly", title: "月度会员", price: "¥8", originalPrice: "¥18", badge: nil, perDayHint: "约 ¥0.27/天", durationLabel: "30 天", highlight: false),
+        PayWallPlan(id: "yearly", title: "年度会员", price: "¥38", originalPrice: "¥98", badge: "省 60%", perDayHint: "约 ¥0.10/天", durationLabel: "365 天", highlight: false),
+        PayWallPlan(id: "lifetime", title: "永久会员", price: "¥68", originalPrice: "¥198", badge: "最划算", perDayHint: "一次买断，终身使用", durationLabel: "永久", highlight: true)
+    ]
+    
+    private let benefits: [(String, String, String)] = [
+        ("nosign", "去除水印", "保存导出的整活卡片不再带「整活局」水印"),
+        ("infinity", "无限生成", "全部模板不限次数，想整就整"),
+        ("crown", "解锁全部模板", "包含 VIP 限定模板与节日模板"),
+        ("hd", "高清导出", "导出图片清晰度更高，朋友圈不糊"),
+        ("paint", "节日 / 限定模板", "每逢节日上新限定模板，会员先用"),
+        ("edit", "自定义文案", "可编辑生成结果的关键文字")
+    ]
+    
+    var body: some View {
+        ZStack {
+            LinearGradient(gradient: Gradient(colors: [Color(hex: "FFF6D6"), Color(hex: "FFFCEC"), Color.themeBackground]), startPoint: .top, endPoint: .bottom)
+                .edgesIgnoringSafeArea(.all)
+            
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 20) {
+                    heroSection
+                    benefitGrid
+                    plansSection
+                    Text("内购为虚拟服务，购买后不支持退款。会员仅供本地体验，未来接入正式支付通道。")
+                        .font(.system(size: 11))
+                        .foregroundColor(.themeTextSecondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 30)
+                        .padding(.top, 4)
+                    Spacer(minLength: 120)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
+            }
+            
+            VStack {
+                Spacer()
+                purchaseBar
+            }
+        }
+        .navigationTitle("开通整活局 VIP")
+        .navigationBarTitleDisplayMode(.inline)
+        .alert(isPresented: $showPurchaseAlert) {
+            Alert(
+                title: Text("支付通道即将开放"),
+                message: Text("当前为前端体验版，购买功能将在正式版接入 App Store 内购。\n\n如果你希望立刻体验 VIP 权益（去水印等），可前往「设置」开启调试 VIP 开关。"),
+                dismissButton: .default(Text("我知道了"))
+            )
+        }
+    }
+    
+    private var heroSection: some View {
+        VStack(spacing: 12) {
+            HStack(alignment: .center, spacing: 10) {
+                Image.bundle("vip_icon")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 44, height: 44)
+                Text("整活局 VIP")
+                    .font(.system(size: 26, weight: .heavy))
+                    .foregroundColor(.themeTextMain)
+            }
+            Text(vip.isVip ? "你已是 VIP — \(vip.expiryDisplay)" : "解锁全部模板，享受更多创作特权")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.themeTextSecondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 24)
+        .background(
+            RoundedRectangle(cornerRadius: 24)
+                .fill(Color.white.opacity(0.55))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24)
+                        .stroke(Color.themePrimary.opacity(0.4), lineWidth: 1)
+                )
+        )
+    }
+    
+    private var benefitGrid: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("会员特权")
+                .font(.system(size: 17, weight: .bold))
+                .foregroundColor(.themeTextMain)
+                .padding(.horizontal, 4)
+            
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                ForEach(0..<benefits.count, id: \.self) { idx in
+                    let item = benefits[idx]
+                    VStack(alignment: .leading, spacing: 8) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(Color.themePrimary.opacity(0.18))
+                                .frame(width: 36, height: 36)
+                            Image(systemName: symbolFor(item.0))
+                                .font(.system(size: 18, weight: .bold))
+                                .foregroundColor(Color(hex: "B58900"))
+                        }
+                        Text(item.1)
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(.themeTextMain)
+                        Text(item.2)
+                            .font(.system(size: 11))
+                            .foregroundColor(.themeTextSecondary)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.white)
+                    .cornerRadius(14)
+                    .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 2)
+                }
+            }
+        }
+    }
+    
+    private var plansSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("选择套餐")
+                .font(.system(size: 17, weight: .bold))
+                .foregroundColor(.themeTextMain)
+                .padding(.horizontal, 4)
+            
+            HStack(spacing: 10) {
+                ForEach(plans) { plan in
+                    planCard(plan)
+                        .onTapGesture {
+                            selectedPlanId = plan.id
+                        }
+                }
+            }
+        }
+    }
+    
+    private func planCard(_ plan: PayWallPlan) -> some View {
+        let isSelected = plan.id == selectedPlanId
+        return VStack(spacing: 6) {
+            if let badge = plan.badge {
+                Text(badge)
+                    .font(.system(size: 10, weight: .heavy))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Color.themeWarningPink)
+                    .cornerRadius(8)
+            } else {
+                Color.clear.frame(height: 16)
+            }
+            Text(plan.title)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(.themeTextMain)
+            Text(plan.price)
+                .font(.system(size: 26, weight: .heavy))
+                .foregroundColor(isSelected ? Color(hex: "B58900") : .themeTextMain)
+            if let original = plan.originalPrice {
+                Text(original)
+                    .font(.system(size: 11))
+                    .foregroundColor(.themeTextSecondary)
+                    .strikethrough(true, color: .themeTextSecondary)
+            }
+            Text(plan.perDayHint ?? plan.durationLabel)
+                .font(.system(size: 10))
+                .foregroundColor(.themeTextSecondary)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .padding(.top, 2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(isSelected ? Color.themePrimary.opacity(0.18) : Color.white)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(isSelected ? Color.themePrimary : Color.gray.opacity(0.15), lineWidth: isSelected ? 2 : 1)
+                )
+        )
+    }
+    
+    private var purchaseBar: some View {
+        VStack(spacing: 8) {
+            Button(action: { showPurchaseAlert = true }) {
+                HStack(spacing: 8) {
+                    Image.bundle("vip_icon")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 20, height: 20)
+                    Text(vip.isVip ? "续费 / 升级" : "立即开通 \(currentPlan.price)")
+                        .font(.system(size: 17, weight: .heavy))
+                        .foregroundColor(.themeTextMain)
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 54)
+                .background(
+                    LinearGradient(gradient: Gradient(colors: [Color(hex: "FFE070"), Color(hex: "FFD43B")]), startPoint: .leading, endPoint: .trailing)
+                )
+                .cornerRadius(27)
+                .shadow(color: Color.themePrimary.opacity(0.4), radius: 10, x: 0, y: 4)
+            }
+            HStack(spacing: 16) {
+                Button("恢复购买") { showPurchaseAlert = true }
+                    .font(.system(size: 12))
+                    .foregroundColor(.themeTextSecondary)
+                Text("·").foregroundColor(.themeTextSecondary)
+                NavigationLink("用户协议") { LegalDocView(kind: .terms) }
+                    .font(.system(size: 12))
+                    .foregroundColor(.themeTextSecondary)
+                Text("·").foregroundColor(.themeTextSecondary)
+                NavigationLink("隐私政策") { LegalDocView(kind: .privacy) }
+                    .font(.system(size: 12))
+                    .foregroundColor(.themeTextSecondary)
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 12)
+        .padding(.bottom, 20)
+        .background(
+            LinearGradient(gradient: Gradient(colors: [Color.white.opacity(0), Color.white]), startPoint: .top, endPoint: .bottom)
+        )
+    }
+    
+    private var currentPlan: PayWallPlan {
+        plans.first(where: { $0.id == selectedPlanId }) ?? plans[2]
+    }
+    
+    private func symbolFor(_ key: String) -> String {
+        switch key {
+        case "nosign": return "nosign"
+        case "infinity": return "infinity"
+        case "crown": return "crown.fill"
+        case "hd": return "rectangle.compress.vertical"
+        case "paint": return "paintpalette.fill"
+        case "edit": return "square.and.pencil"
+        default: return "sparkles"
+        }
+    }
+}
+
+BrowseHistoryView.swift
+Views/Profile · polaji
+
++125
+Added
+import SwiftUI
+ 
+struct BrowseHistoryView: View {
+    @ObservedObject private var store = BrowseHistoryStore.shared
+    @State private var showClearAlert = false
+    
+    var body: some View {
+        Group {
+            if store.entries.isEmpty {
+                emptyState
+            } else {
+                List {
+                    ForEach(store.entries) { entry in
+                        if let template = MockData.template(id: entry.templateId) {
+                            NavigationLink(destination: TemplateDetailView(template: template)) {
+                                row(entry: entry)
+                            }
+                            .listRowBackground(Color.themeBackground)
+                            .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                        } else {
+                            row(entry: entry)
+                                .listRowBackground(Color.themeBackground)
+                                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                        }
+                    }
+                    .onDelete { indexSet in
+                        for idx in indexSet {
+                            store.remove(id: store.entries[idx].id)
+                        }
+                    }
+                }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .background(Color.themeBackground)
+            }
+        }
+        .background(Color.themeBackground.edgesIgnoringSafeArea(.all))
+        .navigationTitle("浏览历史")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if !store.entries.isEmpty {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("清空") { showClearAlert = true }
+                        .foregroundColor(.themeTextMain)
+                }
+            }
+        }
+        .alert("清空浏览历史？", isPresented: $showClearAlert) {
+            Button("清空", role: .destructive) { store.clear() }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("此操作不可撤销，但不影响你已生成的作品。")
+        }
+    }
+    
+    private func row(entry: BrowseHistoryEntry) -> some View {
+        HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color.gray.opacity(0.1))
+                    .frame(width: 64, height: 64)
+                Image.bundle(entry.coverImage)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 64, height: 64)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                Text(entry.templateName)
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(.themeTextMain)
+                    .lineLimit(1)
+                Text(entry.category)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(Color(hex: "7B61FF"))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Color(hex: "7B61FF").opacity(0.12))
+                    .cornerRadius(8)
+                Text(relativeTime(entry.visitedAt))
+                    .font(.system(size: 11))
+                    .foregroundColor(.themeTextSecondary)
+            }
+            Spacer()
+        }
+        .padding(.vertical, 4)
+    }
+    
+    private var emptyState: some View {
+        VStack(spacing: 14) {
+            ZStack {
+                Circle()
+                    .fill(Color.themeSuccessGreen.opacity(0.12))
+                    .frame(width: 96, height: 96)
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.system(size: 40))
+                    .foregroundColor(Color.themeSuccessGreen)
+            }
+            Text("还没有浏览记录")
+                .font(.system(size: 18, weight: .heavy))
+                .foregroundColor(.themeTextMain)
+            Text("打开任意模板即可在这里看到浏览历史。")
+                .font(.system(size: 13))
+                .foregroundColor(.themeTextSecondary)
+                .multilineTextAlignment(.center)
+        }
+        .padding(.vertical, 80)
+        .frame(maxWidth: .infinity)
+    }
+    
+    private func relativeTime(_ date: Date) -> String {
+        let interval = Date().timeIntervalSince(date)
+        if interval < 60 { return "刚刚" }
+        if interval < 3600 { return "\(Int(interval / 60)) 分钟前" }
+        if interval < 86400 { return "\(Int(interval / 3600)) 小时前" }
+        if Calendar.current.isDateInYesterday(date) {
+            let f = DateFormatter()
+            f.dateFormat = "昨天 HH:mm"
+            return f.string(from: date)
+        }
+        let f = DateFormatter()
+        f.dateFormat = "MM-dd HH:mm"
+        return f.string(from: date)
+    }
+}
+
+EditProfileView.swift
+Views/Profile · polaji
+
++169
+Added
+import SwiftUI
+ 
+struct EditProfileView: View {
+    @ObservedObject private var profile = UserProfileStore.shared
+    @Environment(\.presentationMode) var presentationMode
+    
+    @State private var draftNickname: String = ""
+    @State private var draftBio: String = ""
+    @State private var draftAvatar: String = "logo"
+    @State private var showCopied = false
+    
+    private let avatarOptions: [String] = [
+        "logo", "banner_character",
+        "tpl_persona", "tpl_judge", "tpl_vote",
+        "tpl_truth_dare", "tpl_rich", "tpl_stay_up",
+        "tpl_single", "tpl_boss"
+    ]
+    
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 18) {
+                avatarSection
+                
+                fieldSection(title: "昵称") {
+                    TextField("给自己起个昵称", text: $draftNickname)
+                        .padding(14)
+                        .background(Color.white)
+                        .cornerRadius(12)
+                }
+                
+                fieldSection(title: "个人简介") {
+                    ZStack(alignment: .topLeading) {
+                        if draftBio.isEmpty {
+                            Text("一句话介绍你的整活风格")
+                                .font(.system(size: 14))
+                                .foregroundColor(.themeTextSecondary.opacity(0.5))
+                                .padding(.horizontal, 16)
+                                .padding(.top, 14)
+                        }
+                        TextEditor(text: $draftBio)
+                            .scrollContentBackground(.hidden)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .frame(minHeight: 100)
+                    }
+                    .background(Color.white)
+                    .cornerRadius(12)
+                }
+                
+                userIdRow
+                
+                Spacer(minLength: 20)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+        }
+        .background(Color.themeBackground.edgesIgnoringSafeArea(.all))
+        .navigationTitle("编辑资料")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button("保存", action: save)
+                    .fontWeight(.bold)
+                    .disabled(draftNickname.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .foregroundColor(draftNickname.trimmingCharacters(in: .whitespaces).isEmpty ? .themeTextSecondary : Color(hex: "B58900"))
+            }
+        }
+        .onAppear {
+            draftNickname = profile.nickname
+            draftBio = profile.bio
+            draftAvatar = profile.avatarName
+        }
+        .alert("ID 已复制", isPresented: $showCopied) {
+            Button("好的", role: .cancel) {}
+        }
+    }
+    
+    private var avatarSection: some View {
+        VStack(spacing: 10) {
+            Image.bundle(draftAvatar)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 96, height: 96)
+                .background(Color.white)
+                .clipShape(Circle())
+                .overlay(Circle().stroke(Color.white, lineWidth: 4))
+                .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 4)
+            
+            Text("选择头像")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(.themeTextSecondary)
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(avatarOptions, id: \.self) { name in
+                        Button(action: { draftAvatar = name }) {
+                            Image.bundle(name)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 56, height: 56)
+                                .background(Color.white)
+                                .clipShape(Circle())
+                                .overlay(
+                                    Circle()
+                                        .stroke(name == draftAvatar ? Color.themePrimary : Color.clear, lineWidth: 3)
+                                )
+                        }
+                    }
+                }
+                .padding(.horizontal, 4)
+            }
+        }
+        .padding(.vertical, 18)
+        .frame(maxWidth: .infinity)
+        .background(Color.white)
+        .cornerRadius(16)
+    }
+    
+    @ViewBuilder
+    private func fieldSection<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(.themeTextSecondary)
+                .padding(.horizontal, 4)
+            content()
+        }
+    }
+    
+    private var userIdRow: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("我的 ID")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.themeTextMain)
+                Text(profile.userId)
+                    .font(.system(size: 13))
+                    .foregroundColor(.themeTextSecondary)
+            }
+            Spacer()
+            Button(action: copyId) {
+                Text("复制")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.themeTextMain)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.themePrimary.opacity(0.22))
+                    .cornerRadius(12)
+            }
+        }
+        .padding(14)
+        .background(Color.white)
+        .cornerRadius(12)
+    }
+    
+    private func copyId() {
+        UIPasteboard.general.string = profile.userId
+        showCopied = true
+    }
+    
+    private func save() {
+        let trimmed = draftNickname.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        profile.nickname = trimmed
+        profile.bio = draftBio.trimmingCharacters(in: .whitespacesAndNewlines)
+        profile.avatarName = draftAvatar
+        presentationMode.wrappedValue.dismiss()
+    }
+}
+
+FeedbackView.swift
+Views/Profile · polaji
+
++196
+Added
+import SwiftUI
+ 
+struct FeedbackView: View {
+    private let feedbackEmail = "foragekc@outlook.com"
+    
+    @State private var content: String = ""
+    @State private var contact: String = ""
+    @State private var category: String = "我有一个想法"
+    @State private var showMailNotAvailable = false
+    @State private var showCopiedToast = false
+    
+    private let categories: [String] = ["我有一个想法", "Bug 反馈", "模板建议", "审核 / 内容问题", "其他"]
+    
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                categoryCard
+                contentCard
+                contactCard
+                submitButton
+                directContactCard
+                Spacer(minLength: 40)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+        }
+        .background(Color.themeBackground.edgesIgnoringSafeArea(.all))
+        .navigationTitle("意见反馈")
+        .navigationBarTitleDisplayMode(.inline)
+        .alert("无法打开邮件", isPresented: $showMailNotAvailable) {
+            Button("复制邮箱") {
+                UIPasteboard.general.string = feedbackEmail
+                showCopiedToast = true
+            }
+            Button("好的", role: .cancel) {}
+        } message: {
+            Text("没有检测到可用邮箱客户端，请手动联系：\(feedbackEmail)")
+        }
+        .alert("邮箱已复制", isPresented: $showCopiedToast) {
+            Button("好的", role: .cancel) {}
+        } message: {
+            Text("快去你的邮件 App 给我们发反馈吧！")
+        }
+    }
+    
+    private var categoryCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("反馈类型")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(.themeTextSecondary)
+                .padding(.horizontal, 4)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(categories, id: \.self) { c in
+                        Text(c)
+                            .font(.system(size: 13))
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(category == c ? Color.themePrimary : Color.white)
+                            .foregroundColor(category == c ? .themeTextMain : .themeTextSecondary)
+                            .cornerRadius(14)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .stroke(category == c ? Color.themePrimary : Color.gray.opacity(0.15), lineWidth: 1)
+                            )
+                            .onTapGesture { category = c }
+                    }
+                }
+                .padding(.horizontal, 4)
+            }
+        }
+    }
+    
+    private var contentCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("反馈内容")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(.themeTextSecondary)
+                .padding(.horizontal, 4)
+            ZStack(alignment: .topLeading) {
+                if content.isEmpty {
+                    Text("说说你遇到的问题或想看到的玩法吧～")
+                        .font(.system(size: 14))
+                        .foregroundColor(.themeTextSecondary.opacity(0.6))
+                        .padding(.horizontal, 16)
+                        .padding(.top, 14)
+                }
+                TextEditor(text: $content)
+                    .scrollContentBackground(.hidden)
+                    .background(Color.clear)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .frame(minHeight: 140)
+            }
+            .background(Color.white)
+            .cornerRadius(14)
+            HStack {
+                Spacer()
+                Text("\(content.count)/500")
+                    .font(.system(size: 11))
+                    .foregroundColor(.themeTextSecondary)
+            }
+        }
+    }
+    
+    private var contactCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("联系方式（选填）")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(.themeTextSecondary)
+                .padding(.horizontal, 4)
+            TextField("邮箱 / 微信号 / QQ 号，方便我们回复你", text: $contact)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 14)
+                .background(Color.white)
+                .cornerRadius(14)
+        }
+    }
+    
+    private var submitButton: some View {
+        Button(action: sendByEmail) {
+            Text("通过邮件发送反馈")
+                .font(.system(size: 16, weight: .heavy))
+                .foregroundColor(.themeTextMain)
+                .frame(maxWidth: .infinity)
+                .frame(height: 52)
+                .background(content.isEmpty ? Color.themePrimary.opacity(0.4) : Color.themePrimary)
+                .cornerRadius(26)
+        }
+        .disabled(content.isEmpty)
+        .padding(.top, 4)
+    }
+    
+    private var directContactCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("或直接发邮件")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(.themeTextSecondary)
+                .padding(.horizontal, 4)
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("整活局开发者邮箱")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(.themeTextMain)
+                    Text(feedbackEmail)
+                        .font(.system(size: 13))
+                        .foregroundColor(.themeTextSecondary)
+                }
+                Spacer()
+                Button(action: copyEmail) {
+                    Text("复制")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(.themeTextMain)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.themePrimary.opacity(0.22))
+                        .cornerRadius(12)
+                }
+            }
+            .padding(14)
+            .background(Color.white)
+            .cornerRadius(14)
+        }
+    }
+    
+    private func copyEmail() {
+        UIPasteboard.general.string = feedbackEmail
+        showCopiedToast = true
+    }
+    
+    private func sendByEmail() {
+        let subject = "[整活局反馈] \(category)"
+        var bodyText = content
+        if !contact.isEmpty {
+            bodyText += "\n\n———\n联系方式: \(contact)"
+        }
+        bodyText += "\n\n———\n反馈类型: \(category)"
+        bodyText += "\nApp 版本: V \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0.0")"
+        bodyText += "\n设备: \(UIDevice.current.model) / iOS \(UIDevice.current.systemVersion)"
+        
+        let allowed = CharacterSet.urlQueryAllowed
+        let s = subject.addingPercentEncoding(withAllowedCharacters: allowed) ?? ""
+        let b = bodyText.addingPercentEncoding(withAllowedCharacters: allowed) ?? ""
+        let urlStr = "mailto:\(feedbackEmail)?subject=\(s)&body=\(b)"
+        
+        guard let url = URL(string: urlStr) else {
+            showMailNotAvailable = true
+            return
+        }
+        if UIApplication.shared.canOpenURL(url) {
+            UIApplication.shared.open(url)
+        } else {
+            showMailNotAvailable = true
+        }
+    }
+}
+
+InviteCodeView.swift
+Views/Profile · polaji
+
++98
+Added
+import SwiftUI
+ 
+struct InviteCodeView: View {
+    @State private var animate = false
+    
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                gradient: Gradient(colors: [Color(hex: "FFF6D6"), Color(hex: "FFE4EC"), Color(hex: "EDE7FF")]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .edgesIgnoringSafeArea(.all)
+            
+            VStack(spacing: 28) {
+                Spacer()
+                
+                ZStack {
+                    Circle()
+                        .fill(Color.white.opacity(0.6))
+                        .frame(width: 160, height: 160)
+                    Circle()
+                        .fill(Color.white.opacity(0.9))
+                        .frame(width: 120, height: 120)
+                    Image.bundle("logo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 80, height: 80)
+                        .rotationEffect(.degrees(animate ? 8 : -8))
+                        .animation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true), value: animate)
+                }
+                .shadow(color: Color.themePrimary.opacity(0.3), radius: 16, x: 0, y: 8)
+                
+                VStack(spacing: 12) {
+                    Text("敬请期待")
+                        .font(.system(size: 30, weight: .heavy))
+                        .foregroundColor(.themeTextMain)
+                    
+                    HStack(spacing: 6) {
+                        Capsule().fill(Color.themePrimary).frame(width: 6, height: 6)
+                        Text("Coming Soon")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(Color(hex: "B58900"))
+                            .tracking(2)
+                        Capsule().fill(Color.themePrimary).frame(width: 6, height: 6)
+                    }
+                    
+                    Text("邀请好友领会员的活动正在筹备中，\n上线后你可以在这里查看专属邀请码、邀请记录和奖励进度。")
+                        .font(.system(size: 14))
+                        .foregroundColor(.themeTextSecondary)
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(4)
+                        .padding(.horizontal, 30)
+                }
+                
+                VStack(spacing: 12) {
+                    featureRow(icon: "gift.fill", color: Color(hex: "FF6B8A"), title: "邀请有礼", subtitle: "邀请 1 位好友赠送 7 天会员")
+                    featureRow(icon: "person.2.fill", color: Color(hex: "7B61FF"), title: "邀请记录", subtitle: "实时查看好友是否完成注册")
+                    featureRow(icon: "crown.fill", color: Color(hex: "FFB300"), title: "成长奖励", subtitle: "邀请越多，会员时长越长")
+                }
+                .padding(.horizontal, 24)
+                
+                Spacer()
+                Spacer()
+            }
+            .padding(.bottom, 60)
+        }
+        .navigationTitle("我的邀请码")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear { animate = true }
+    }
+    
+    private func featureRow(icon: String, color: Color, title: String, subtitle: String) -> some View {
+        HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(color.opacity(0.18))
+                    .frame(width: 36, height: 36)
+                Image(systemName: icon)
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(color)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.themeTextMain)
+                Text(subtitle)
+                    .font(.system(size: 12))
+                    .foregroundColor(.themeTextSecondary)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(Color.white.opacity(0.7))
+        .cornerRadius(14)
+    }
+}
+
+MyOrdersView.swift
+Views/Profile · polaji
+
++131
+Added
+import SwiftUI
+ 
+struct MyOrdersView: View {
+    @ObservedObject private var vip = VipManager.shared
+    
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                if vip.isVip {
+                    activeVipCard
+                } else {
+                    emptyState
+                }
+                
+                ordersExplanation
+                
+                Spacer(minLength: 40)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 16)
+        }
+        .background(Color.themeBackground.edgesIgnoringSafeArea(.all))
+        .navigationTitle("我的订单")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+    
+    private var activeVipCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Image.bundle("vip_icon")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 36, height: 36)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(vip.planName.isEmpty ? "整活局 VIP" : vip.planName)
+                        .font(.system(size: 17, weight: .heavy))
+                        .foregroundColor(.themeTextMain)
+                    Text(vip.expiryDisplay)
+                        .font(.system(size: 12))
+                        .foregroundColor(.themeTextSecondary)
+                }
+                Spacer()
+                Text("已激活")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(Color.themeSuccessGreen)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(Color.themeSuccessGreen.opacity(0.15))
+                    .cornerRadius(10)
+            }
+            Divider()
+            HStack {
+                infoCell(title: "订单类型", value: "前端体验版")
+                Spacer()
+                infoCell(title: "购买渠道", value: "本地激活")
+                Spacer()
+                infoCell(title: "支付状态", value: "未实际扣费")
+            }
+        }
+        .padding(16)
+        .background(Color.white)
+        .cornerRadius(16)
+    }
+    
+    private func infoCell(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.system(size: 11))
+                .foregroundColor(.themeTextSecondary)
+            Text(value)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(.themeTextMain)
+        }
+    }
+    
+    private var emptyState: some View {
+        VStack(spacing: 14) {
+            ZStack {
+                Circle()
+                    .fill(Color.themePrimary.opacity(0.15))
+                    .frame(width: 96, height: 96)
+                Image(systemName: "tray.fill")
+                    .font(.system(size: 40, weight: .regular))
+                    .foregroundColor(Color(hex: "B58900"))
+            }
+            Text("还没有订单")
+                .font(.system(size: 18, weight: .heavy))
+                .foregroundColor(.themeTextMain)
+            Text("开通整活局 VIP 即可去除水印、无限生成。")
+                .font(.system(size: 13))
+                .foregroundColor(.themeTextSecondary)
+                .multilineTextAlignment(.center)
+            NavigationLink(destination: PayWallView()) {
+                Text("去开通会员")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(.themeTextMain)
+                    .padding(.horizontal, 28)
+                    .padding(.vertical, 12)
+                    .background(Color.themePrimary)
+                    .cornerRadius(22)
+                    .shadow(color: Color.themePrimary.opacity(0.35), radius: 8, x: 0, y: 4)
+            }
+            .padding(.top, 8)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 36)
+        .background(Color.white)
+        .cornerRadius(16)
+    }
+    
+    private var ordersExplanation: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("说明")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(.themeTextMain)
+            Text("正式版会接入 App Store 内购通道，购买记录将通过 StoreKit 自动同步至本页面，可在此查看订阅状态、续费时间与历史发票。当前为前端体验版，购买按钮为占位。")
+                .font(.system(size: 12))
+                .foregroundColor(.themeTextSecondary)
+                .lineSpacing(3)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.white.opacity(0.6))
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.gray.opacity(0.12), lineWidth: 1)
+        )
+    }
+}
+
+ProfileView.swift
+Views/Profile · polaji
+
++267
+Added
+import SwiftUI
+ 
+struct ProfileView: View {
+    @ObservedObject private var profile = UserProfileStore.shared
+    @ObservedObject private var vip = VipManager.shared
+    @ObservedObject private var works = WorksStore.shared
+    
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 16) {
+                    headerBar
+                    userCard
+                    statsCard
+                    vipBanner
+                    menuList
+                    
+                    Spacer(minLength: 120)
+                }
+                .padding(.horizontal, 16)
+            }
+            .background(Color.themeBackground.edgesIgnoringSafeArea(.all))
+        }
+    }
+    
+    private var headerBar: some View {
+        HStack(spacing: 12) {
+            HStack(spacing: 6) {
+                Text("我的")
+                    .font(.system(size: 24, weight: .heavy))
+                    .foregroundColor(.themeTextMain)
+                Text("🎉")
+                    .font(.system(size: 22))
+            }
+            Spacer()
+            NavigationLink(destination: PayWallView()) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 22)
+                        .fill(vip.isVip ? Color.themePrimary : Color.themePrimary.opacity(0.22))
+                        .frame(width: 80, height: 44)
+                    HStack(spacing: 4) {
+                        Image.bundle("vip_icon")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 24, height: 24)
+                            .grayscale(vip.isVip ? 0.0 : 0.55)
+                            .opacity(vip.isVip ? 1.0 : 0.85)
+                        Text("VIP")
+                            .font(.system(size: 14, weight: .heavy))
+                            .foregroundColor(.themeTextMain)
+                    }
+                }
+            }
+            .buttonStyle(PlainButtonStyle())
+            
+            NavigationLink(destination: SettingsView()) {
+                ZStack {
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: 44, height: 44)
+                        .shadow(color: .black.opacity(0.06), radius: 4, x: 0, y: 2)
+                    Image.bundle("settings_icon")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 24, height: 24)
+                }
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+        .padding(.top, 10)
+    }
+    
+    private var userCard: some View {
+        NavigationLink(destination: EditProfileView()) {
+            HStack(spacing: 14) {
+                Image.bundle(profile.avatarName)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 64, height: 64)
+                    .background(Color.themePrimary.opacity(0.15))
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(Color.white, lineWidth: 3))
+                    .shadow(color: .black.opacity(0.08), radius: 4, x: 0, y: 2)
+                
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 6) {
+                        Text(profile.nickname)
+                            .font(.system(size: 18, weight: .heavy))
+                            .foregroundColor(.themeTextMain)
+                            .lineLimit(1)
+                        if vip.isVip {
+                            Text("VIP")
+                                .font(.system(size: 10, weight: .heavy))
+                                .foregroundColor(.themeTextMain)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.themePrimary)
+                                .cornerRadius(6)
+                        }
+                    }
+                    Text("ID: \(profile.userId)")
+                        .font(.system(size: 11))
+                        .foregroundColor(.themeTextSecondary)
+                    Text(profile.bio)
+                        .font(.system(size: 13))
+                        .foregroundColor(.themeTextSecondary)
+                        .lineLimit(2)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.themeTextSecondary)
+            }
+            .padding(16)
+            .background(Color.white)
+            .cornerRadius(18)
+            .shadow(color: .black.opacity(0.04), radius: 6, x: 0, y: 3)
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+    
+    private var statsCard: some View {
+        NavigationLink(destination: MyWorksView()) {
+            HStack(spacing: 14) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("我的作品")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(.themeTextSecondary)
+                    Text("\(works.works.count)")
+                        .font(.system(size: 28, weight: .heavy))
+                        .foregroundColor(.themeTextMain)
+                    Text("已生成的整活卡片")
+                        .font(.system(size: 11))
+                        .foregroundColor(.themeTextSecondary)
+                }
+                Spacer()
+                ZStack {
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(Color.themePrimary.opacity(0.18))
+                        .frame(width: 56, height: 56)
+                    Image(systemName: "rectangle.stack.fill")
+                        .font(.system(size: 24))
+                        .foregroundColor(Color(hex: "B58900"))
+                }
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.themeTextSecondary)
+            }
+            .padding(16)
+            .background(Color.white)
+            .cornerRadius(18)
+            .shadow(color: .black.opacity(0.04), radius: 6, x: 0, y: 3)
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+    
+    private var vipBanner: some View {
+        NavigationLink(destination: PayWallView()) {
+            HStack(spacing: 14) {
+                ZStack {
+                    Circle()
+                        .fill(Color.white.opacity(0.25))
+                        .frame(width: 52, height: 52)
+                    Image.bundle("vip_icon")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 32, height: 32)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(vip.isVip ? "你已是整活局 VIP" : "整活局 VIP")
+                        .font(.system(size: 17, weight: .heavy))
+                        .foregroundColor(.themeTextMain)
+                    Text(vip.isVip ? vip.expiryDisplay : "解锁全部模板，去除水印")
+                        .font(.system(size: 12))
+                        .foregroundColor(.themeTextMain.opacity(0.75))
+                        .lineLimit(2)
+                }
+                Spacer()
+                Text(vip.isVip ? "续费" : "立即升级")
+                    .font(.system(size: 13, weight: .heavy))
+                    .foregroundColor(.themeTextMain)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(Color.white)
+                    .cornerRadius(16)
+                    .shadow(color: .black.opacity(0.08), radius: 3, x: 0, y: 2)
+            }
+            .padding(16)
+            .background(
+                LinearGradient(
+                    gradient: Gradient(colors: [Color(hex: "FFE070"), Color(hex: "FFD43B")]),
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            .cornerRadius(18)
+            .shadow(color: Color.themePrimary.opacity(0.25), radius: 10, x: 0, y: 4)
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+    
+    private var menuList: some View {
+        VStack(spacing: 0) {
+            menuRow(icon: "doc.text.fill", color: Color(hex: "FFB300"), title: "我的订单", subtitle: "查看会员订单与支付记录") {
+                MyOrdersView()
+            }
+            divider()
+            menuRow(icon: "gift.fill", color: Color(hex: "FF6B8A"), title: "我的邀请码", subtitle: "邀请好友领整活会员") {
+                InviteCodeView()
+            }
+            divider()
+            menuRow(icon: "clock.fill", color: Color(hex: "7B61FF"), title: "浏览历史", subtitle: "看过的模板都在这") {
+                BrowseHistoryView()
+            }
+            divider()
+            menuRow(icon: "bubble.left.fill", color: Color(hex: "4CAF7D"), title: "意见反馈", subtitle: "告诉我们你想要的整活玩法") {
+                FeedbackView()
+            }
+            divider()
+            menuRow(icon: "info.circle.fill", color: Color(hex: "5BC0EB"), title: "关于整活局", subtitle: "版本 / 协议 / 开发者") {
+                AboutView()
+            }
+        }
+        .background(Color.white)
+        .cornerRadius(18)
+        .shadow(color: .black.opacity(0.04), radius: 6, x: 0, y: 3)
+    }
+    
+    @ViewBuilder
+    private func menuRow<Destination: View>(icon: String, color: Color, title: String, subtitle: String, @ViewBuilder destination: () -> Destination) -> some View {
+        NavigationLink(destination: destination()) {
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(color.opacity(0.18))
+                        .frame(width: 36, height: 36)
+                    Image(systemName: icon)
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(color)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundColor(.themeTextMain)
+                    Text(subtitle)
+                        .font(.system(size: 11))
+                        .foregroundColor(.themeTextSecondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.themeTextSecondary)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+    
+    private func divider() -> some View {
+        Rectangle()
+            .fill(Color.gray.opacity(0.08))
+            .frame(height: 1)
+            .padding(.leading, 66)
+    }
+}
+
+ResultView.swift
+Views · polaji
+
++5
+−3
+    
+    @State private var currentInputs: [String: String] = [:]
+    @State private var generatedCard: GeneratedCard?
+    @StateObject private var store = WorksStore()
+    @ObservedObject private var store = WorksStore.shared
+    @Environment(\.presentationMode) var presentationMode
+    @State private var showingAlert = false
+    @State private var alertMessage = ""
+        generateCard()
+    }
+    
+    @MainActor
+    private func getRenderedImage() -> UIImage? {
+        guard let card = generatedCard else { return nil }
+        let uiView = ResultCardUI(card: card)
+        return ImageExportManager.shared.renderImage(from: uiView, size: CGSize(width: 350, height: 520))
+        let isVip = VipManager.shared.isVip
+        let exportCard = ResultCardUI(card: card, exportMode: true, showWatermark: !isVip)
+        return ImageExportManager.shared.renderImage(from: exportCard, size: CGSize(width: 350, height: 520))
+    }
+    
+    private func saveImageAndWork() {
+
+AboutView.swift
+Views/Settings · polaji
+
++108
+Added
+import SwiftUI
+ 
+struct AboutView: View {
+    private var appName: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
+            ?? Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String
+            ?? "整活局"
+    }
+    private var version: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0.0"
+    }
+    private var build: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
+    }
+    
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 24) {
+                VStack(spacing: 12) {
+                    Image.bundle("logo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 96, height: 96)
+                        .background(Color.white)
+                        .cornerRadius(24)
+                        .shadow(color: Color.black.opacity(0.08), radius: 12, x: 0, y: 6)
+                    Text(appName)
+                        .font(.system(size: 22, weight: .heavy))
+                        .foregroundColor(.themeTextMain)
+                    Text("和朋友一起整活，好玩又有梗")
+                        .font(.system(size: 14))
+                        .foregroundColor(.themeTextSecondary)
+                    Text("V \(version) (Build \(build))")
+                        .font(.system(size: 12))
+                        .foregroundColor(.themeTextSecondary)
+                        .padding(.top, 4)
+                }
+                .padding(.top, 30)
+                
+                VStack(alignment: .leading, spacing: 0) {
+                    aboutRow(title: "产品介绍") {
+                        Text("整活局是一款本地运行的中文整活卡片生成器。选择模板 → 填写昵称或关键词 → 一键生成可分享的搞笑人设卡、判决书、投票榜或状态卡。所有内容均为本地随机生成，仅供朋友间娱乐。")
+                            .font(.system(size: 14))
+                            .foregroundColor(.themeTextMain.opacity(0.85))
+                            .lineSpacing(4)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Divider().padding(.horizontal, 16)
+                    NavigationLink(destination: LegalDocView(kind: .privacy)) {
+                        rowItem(title: "隐私政策", hint: nil)
+                    }
+                    Divider().padding(.horizontal, 16)
+                    NavigationLink(destination: LegalDocView(kind: .terms)) {
+                        rowItem(title: "用户协议", hint: nil)
+                    }
+                    Divider().padding(.horizontal, 16)
+                    rowItem(title: "开发者", hint: "Forage409")
+                }
+                .background(Color.white)
+                .cornerRadius(14)
+                .padding(.horizontal, 16)
+                
+                Text("© 2026 整活局 · 所有权利保留")
+                    .font(.system(size: 11))
+                    .foregroundColor(.themeTextSecondary)
+                    .padding(.top, 20)
+                
+                Spacer(minLength: 40)
+            }
+        }
+        .background(Color.themeBackground.edgesIgnoringSafeArea(.all))
+        .navigationTitle("关于整活局")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+    
+    @ViewBuilder
+    private func aboutRow<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(.themeTextMain)
+            content()
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+    
+    private func rowItem(title: String, hint: String?) -> some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 15))
+                .foregroundColor(.themeTextMain)
+            Spacer()
+            if let hint = hint {
+                Text(hint)
+                    .font(.system(size: 13))
+                    .foregroundColor(.themeTextSecondary)
+            } else {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.themeTextSecondary)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .contentShape(Rectangle())
+    }
+}
+
+LegalDocView.swift
+Views/Settings · polaji
+
++109
+Added
+import SwiftUI
+ 
+enum LegalDocKind {
+    case privacy
+    case terms
+    
+    var title: String {
+        switch self {
+        case .privacy: return "隐私政策"
+        case .terms: return "用户协议"
+        }
+    }
+    
+    var sections: [(String, String)] {
+        switch self {
+        case .privacy:
+            return [
+                ("一、我们收集哪些信息", """
+                整活局 App 在本版本中是一款纯本地运行的工具，我们不会主动收集你的任何个人信息，也不会将数据上传到任何服务器。
+ 
+                你在 App 内输入的昵称、性别、关键词、判官参与人姓名等内容，仅会用于在你本人的设备上生成卡片，并保存在你的设备本地（UserDefaults 与 Documents 目录），不会以任何形式离开你的手机。
+                """),
+                ("二、相册与照片权限", """
+                当你点击"保存图片"时，整活局会请求"添加到相册"权限，仅用于把你生成的整活卡片写入系统相册。我们不会读取你相册里的其它照片，也不会上传任何图片。
+ 
+                你可以随时在系统「设置 > 隐私与安全性 > 照片」中关闭该权限。
+                """),
+                ("三、通知权限", """
+                你可以选择开启或关闭本地通知。我们不会推送任何营销内容，本地通知仅用于你自己设置的每日生成提醒（如有）。
+                """),
+                ("四、儿童隐私", """
+                整活局不向 14 岁以下儿童定向收集任何信息。如发现误收集，请通过"意见反馈"联系我们删除。
+                """),
+                ("五、隐私政策变更", """
+                如果隐私政策有任何变更，我们会在 App 更新时在本页面更新，并在重要变更时通过显眼方式提示你。
+                """),
+                ("六、联系我们", """
+                如对隐私政策有任何疑问，可通过"意见反馈"功能联系开发者邮箱。
+                """)
+            ]
+        case .terms:
+            return [
+                ("一、服务说明", """
+                整活局是一款由开发者独立开发的中文整活卡片生成工具。所有模板、文案库均为虚构创作，内容仅供朋友间娱乐使用，请勿当真。
+                """),
+                ("二、用户行为规范", """
+                你不得使用本 App 生成的内容进行：
+                • 人身攻击、辱骂或网络暴力
+                • 涉及色情、暴力、赌博、政治敏感等违法违规内容的传播
+                • 冒充他人或冒用真实身份生成判决书 / 投票榜
+                • 任何违反所在国家 / 地区法律法规的行为
+                """),
+                ("三、内容免责", """
+                所有由模板生成的"鉴定结果"、"投票排名"、"判决书"均为随机文案组合，不构成任何形式的真实评价、命理预测或法律意见，请勿作为现实判断依据。
+                """),
+                ("四、知识产权", """
+                整活局 App 的图标、UI、模板文案、卡片样式版权均归开发者所有。生成的卡片仅供个人非商业用途使用，未经授权不得用于商业宣传。
+                """),
+                ("五、付费与会员", """
+                正式版上线后，会员订阅 / 内购通过 Apple App Store 支付通道完成，订阅会自动续费除非你在 App Store 主动取消。当前体验版的购买按钮为占位，未发生实际扣费。
+                """),
+                ("六、协议变更", """
+                我们可能不时更新本协议，更新后将在 App 内同步展示。继续使用本 App 即视为你接受最新版本协议。
+                """)
+            ]
+        }
+    }
+}
+ 
+struct LegalDocView: View {
+    let kind: LegalDocKind
+    
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                Text(kind.title)
+                    .font(.system(size: 26, weight: .heavy))
+                    .foregroundColor(.themeTextMain)
+                Text("生效日期：2026 年 5 月 30 日")
+                    .font(.system(size: 12))
+                    .foregroundColor(.themeTextSecondary)
+                
+                ForEach(0..<kind.sections.count, id: \.self) { idx in
+                    let section = kind.sections[idx]
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(section.0)
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.themeTextMain)
+                        Text(section.1)
+                            .font(.system(size: 14))
+                            .foregroundColor(.themeTextMain.opacity(0.8))
+                            .lineSpacing(4)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.white)
+                    .cornerRadius(14)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+            .padding(.bottom, 40)
+        }
+        .background(Color.themeBackground.edgesIgnoringSafeArea(.all))
+        .navigationTitle(kind.title)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+NotificationSettingsView.swift
+Views/Settings · polaji
+
++196
+Added
+import SwiftUI
+import UserNotifications
+ 
+struct NotificationSettingsView: View {
+    @State private var systemAuthorized = false
+    @State private var systemDenied = false
+    @State private var dailyReminderEnabled = UserDefaults.standard.bool(forKey: "ZhengHuoJu_DailyReminder")
+    @State private var newTemplateEnabled = UserDefaults.standard.object(forKey: "ZhengHuoJu_NewTemplateNotify") as? Bool ?? true
+    @State private var showSettingsAlert = false
+    
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 14) {
+                statusBanner
+                
+                VStack(spacing: 0) {
+                    toggleRow(
+                        title: "每日整活提醒",
+                        subtitle: "每天 20:00 提醒你生成今日人设卡",
+                        binding: $dailyReminderEnabled,
+                        onChange: { handleDailyReminderChange($0) }
+                    )
+                    Divider().padding(.horizontal, 16)
+                    toggleRow(
+                        title: "新模板上线提醒",
+                        subtitle: "上新有梗模板时通知你",
+                        binding: $newTemplateEnabled,
+                        onChange: { value in
+                            UserDefaults.standard.set(value, forKey: "ZhengHuoJu_NewTemplateNotify")
+                        }
+                    )
+                }
+                .background(Color.white)
+                .cornerRadius(14)
+                .padding(.horizontal, 16)
+                
+                Text("整活局不会推送任何营销内容。本地通知由系统调度，不依赖任何服务器。")
+                    .font(.system(size: 11))
+                    .foregroundColor(.themeTextSecondary)
+                    .multilineTextAlignment(.leading)
+                    .padding(.horizontal, 24)
+                    .padding(.top, 8)
+                
+                Spacer(minLength: 40)
+            }
+            .padding(.top, 12)
+        }
+        .background(Color.themeBackground.edgesIgnoringSafeArea(.all))
+        .navigationTitle("通知设置")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear(perform: refreshAuthorization)
+        .alert(isPresented: $showSettingsAlert) {
+            Alert(
+                title: Text("通知权限未开启"),
+                message: Text("请前往系统设置开启「整活局」通知权限后再试。"),
+                primaryButton: .default(Text("去设置"), action: openSystemSettings),
+                secondaryButton: .cancel(Text("取消"), action: {
+                    dailyReminderEnabled = false
+                })
+            )
+        }
+    }
+    
+    private var statusBanner: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(statusColor.opacity(0.18))
+                    .frame(width: 44, height: 44)
+                Image(systemName: systemAuthorized ? "bell.fill" : (systemDenied ? "bell.slash.fill" : "bell"))
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(statusColor)
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                Text(statusTitle)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.themeTextMain)
+                Text(statusSubtitle)
+                    .font(.system(size: 12))
+                    .foregroundColor(.themeTextSecondary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+            if systemDenied {
+                Button(action: openSystemSettings) {
+                    Text("去设置")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(.themeTextMain)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.themePrimary)
+                        .cornerRadius(12)
+                }
+            }
+        }
+        .padding(16)
+        .background(Color.white)
+        .cornerRadius(14)
+        .padding(.horizontal, 16)
+    }
+    
+    private var statusColor: Color {
+        if systemAuthorized { return Color.themeSuccessGreen }
+        if systemDenied { return Color.themeWarningPink }
+        return Color.themeTextSecondary
+    }
+    
+    private var statusTitle: String {
+        if systemAuthorized { return "通知权限已开启" }
+        if systemDenied { return "通知权限已被拒绝" }
+        return "尚未请求通知权限"
+    }
+    
+    private var statusSubtitle: String {
+        if systemAuthorized { return "你可以在下面分别设置不同类型的提醒。" }
+        if systemDenied { return "前往系统设置开启通知权限，才能收到整活提醒。" }
+        return "开启下方任一开关时会请求系统通知授权。"
+    }
+    
+    private func toggleRow(title: String, subtitle: String, binding: Binding<Bool>, onChange: @escaping (Bool) -> Void) -> some View {
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(.themeTextMain)
+                Text(subtitle)
+                    .font(.system(size: 12))
+                    .foregroundColor(.themeTextSecondary)
+            }
+            Spacer()
+            Toggle("", isOn: binding)
+                .labelsHidden()
+                .tint(Color.themePrimary)
+                .onChange(of: binding.wrappedValue) { value in
+                    onChange(value)
+                }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+    }
+    
+    private func handleDailyReminderChange(_ enabled: Bool) {
+        UserDefaults.standard.set(enabled, forKey: "ZhengHuoJu_DailyReminder")
+        if enabled {
+            UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in
+                DispatchQueue.main.async {
+                    if granted {
+                        scheduleDailyReminder()
+                        refreshAuthorization()
+                    } else {
+                        dailyReminderEnabled = false
+                        UserDefaults.standard.set(false, forKey: "ZhengHuoJu_DailyReminder")
+                        refreshAuthorization()
+                        showSettingsAlert = true
+                    }
+                }
+            }
+        } else {
+            cancelDailyReminder()
+        }
+    }
+    
+    private func refreshAuthorization() {
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            DispatchQueue.main.async {
+                systemAuthorized = settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional
+                systemDenied = settings.authorizationStatus == .denied
+            }
+        }
+    }
+    
+    private func scheduleDailyReminder() {
+        let content = UNMutableNotificationContent()
+        content.title = "整活局"
+        content.body = "今天还没整活？快来生成你今天的专属人设卡 🎉"
+        content.sound = .default
+        
+        var date = DateComponents()
+        date.hour = 20
+        date.minute = 0
+        let trigger = UNCalendarNotificationTrigger(dateMatching: date, repeats: true)
+        let request = UNNotificationRequest(identifier: "ZhengHuoJu_DailyReminder", content: content, trigger: trigger)
+        UNUserNotificationCenter.current().add(request)
+    }
+    
+    private func cancelDailyReminder() {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["ZhengHuoJu_DailyReminder"])
+    }
+    
+    private func openSystemSettings() {
+        if let url = URL(string: UIApplication.openSettingsURLString) {
+            UIApplication.shared.open(url)
+        }
+    }
+}
+
+SettingsView.swift
+Views/Settings · polaji
+
++185
+Added
+import SwiftUI
+ 
+struct SettingsView: View {
+    @ObservedObject private var vip = VipManager.shared
+    
+    @State private var cacheSize: Int64 = 0
+    @State private var isClearing = false
+    @State private var showClearAlert = false
+    @State private var showClearResult = false
+    @State private var clearResultMessage = ""
+    
+    private var version: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0.0"
+    }
+    private var build: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
+    }
+    
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 14) {
+                section(title: "隐私与通知") {
+                    NavigationLink(destination: LegalDocView(kind: .privacy)) {
+                        row(title: "隐私设置", subtitle: "查看完整隐私政策与权限说明", trailing: .chevron)
+                    }
+                    divider()
+                    NavigationLink(destination: NotificationSettingsView()) {
+                        row(title: "通知设置", subtitle: "本地提醒与系统通知权限", trailing: .chevron)
+                    }
+                }
+                
+                section(title: "存储") {
+                    Button(action: { showClearAlert = true }) {
+                        row(
+                            title: "清除缓存",
+                            subtitle: isClearing ? "正在清理…" : "可释放本地缓存与临时文件",
+                            trailing: .text(CacheManager.formatBytes(cacheSize))
+                        )
+                    }
+                    .disabled(isClearing)
+                }
+                
+                section(title: "关于") {
+                    NavigationLink(destination: AboutView()) {
+                        row(title: "关于整活局", subtitle: "App 介绍 / 协议", trailing: .chevron)
+                    }
+                    divider()
+                    row(title: "当前版本", subtitle: "Build \(build)", trailing: .text("V \(version)"))
+                }
+                
+                section(title: "测试入口") {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("调试 VIP 开关")
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundColor(.themeTextMain)
+                            Text("正式版会接入 App Store 内购，目前用此开关临时切换 VIP 状态体验去水印效果。")
+                                .font(.system(size: 12))
+                                .foregroundColor(.themeTextSecondary)
+                                .lineLimit(3)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer()
+                        Toggle("", isOn: Binding(
+                            get: { vip.isVip },
+                            set: { newValue in
+                                if newValue {
+                                    vip.activate(plan: "调试 VIP", expiry: nil)
+                                } else {
+                                    vip.deactivate()
+                                }
+                            }
+                        ))
+                        .labelsHidden()
+                        .tint(Color.themePrimary)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+                }
+                
+                Spacer(minLength: 40)
+            }
+            .padding(.top, 12)
+        }
+        .background(Color.themeBackground.edgesIgnoringSafeArea(.all))
+        .navigationTitle("设置")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear(perform: refreshCacheSize)
+        .alert(isPresented: $showClearAlert) {
+            Alert(
+                title: Text("确认清除缓存？"),
+                message: Text("将清理临时文件与图片缓存（不会删除你已生成的作品）。"),
+                primaryButton: .destructive(Text("清除"), action: performClear),
+                secondaryButton: .cancel(Text("取消"))
+            )
+        }
+        .alert("缓存清理完成", isPresented: $showClearResult) {
+            Button("好的", role: .cancel) {}
+        } message: {
+            Text(clearResultMessage)
+        }
+    }
+    
+    private enum TrailingStyle {
+        case chevron
+        case text(String)
+    }
+    
+    private func row(title: String, subtitle: String?, trailing: TrailingStyle) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(.themeTextMain)
+                if let subtitle = subtitle {
+                    Text(subtitle)
+                        .font(.system(size: 12))
+                        .foregroundColor(.themeTextSecondary)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer()
+            switch trailing {
+            case .chevron:
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.themeTextSecondary)
+            case .text(let txt):
+                Text(txt)
+                    .font(.system(size: 13))
+                    .foregroundColor(.themeTextSecondary)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .contentShape(Rectangle())
+    }
+    
+    @ViewBuilder
+    private func section<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(.themeTextSecondary)
+                .padding(.horizontal, 20)
+            VStack(spacing: 0) { content() }
+                .background(Color.white)
+                .cornerRadius(14)
+                .padding(.horizontal, 16)
+        }
+    }
+    
+    private func divider() -> some View {
+        Divider()
+            .padding(.horizontal, 16)
+    }
+    
+    private func refreshCacheSize() {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let size = CacheManager.computeCacheSize()
+            DispatchQueue.main.async {
+                cacheSize = size
+            }
+        }
+    }
+    
+    private func performClear() {
+        isClearing = true
+        DispatchQueue.global(qos: .userInitiated).async {
+            let before = CacheManager.computeCacheSize()
+            CacheManager.clearCache()
+            let after = CacheManager.computeCacheSize()
+            let freed = max(0, before - after)
+            DispatchQueue.main.async {
+                cacheSize = after
+                isClearing = false
+                clearResultMessage = freed > 0
+                    ? "已释放 \(CacheManager.formatBytes(freed)) 空间。"
+                    : "暂无可清理的缓存。"
+                showClearResult = true
+            }
+        }
+    }
+}
+
+TemplateDetailView.swift
+Views · polaji
+
++3
+        }
+        .background(Color.themeBackground.edgesIgnoringSafeArea(.all))
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            BrowseHistoryStore.shared.record(template: template)
+        }
+    }
+}
+
+WorkDetailView.swift
+Views · polaji
+
++1
+−1
+import SwiftUI
+ 
+struct WorkDetailView: View {
+    let work: Work
+    @StateObject private var store = WorksStore()
+    @ObservedObject private var store = WorksStore.shared
+    @Environment(\.presentationMode) var presentationMode
+    @State private var showingAlert = false
+    @State private var alertMessage = ""

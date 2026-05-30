@@ -54,7 +54,7 @@ struct AboutView: View {
                         rowItem(title: "用户协议", hint: nil)
                     }
                     Divider().padding(.horizontal, 16)
-                    rowItem(title: "开发者", hint: "Forage409")
+                    rowItem(title: "开发者", hint: "整活局团队")
                 }
                 .background(Color.white)
                 .cornerRadius(14)

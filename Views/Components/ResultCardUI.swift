@@ -84,7 +84,7 @@ struct ResultCardUI: View {
                 .background(Color.white.opacity(0.4))
             }
         }
-        .frame(width: 350, height: showWatermark ? 560 : 520, alignment: .top)
+        .frame(width: 350, alignment: .top)
         .cornerRadius(exportMode ? 0 : 24)
         .shadow(color: exportMode ? .clear : .black.opacity(0.15), radius: exportMode ? 0 : 20, x: 0, y: exportMode ? 0 : 10)
     }
@@ -142,6 +142,7 @@ struct ResultCardUI: View {
                         Text(evidence)
                             .font(.system(size: 13, weight: .medium))
                             .foregroundColor(headerTextColor.opacity(0.9))
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
@@ -158,6 +159,7 @@ struct ResultCardUI: View {
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(headerTextColor)
                     .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .padding()
             .frame(maxWidth: .infinity)

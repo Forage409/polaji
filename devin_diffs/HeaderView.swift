@@ -1,0 +1,101 @@
+
++46
+−29
+import SwiftUI
+ 
+struct HeaderView: View {
+    @State private var isVip = false
+    var title: String = "整活局"
+    var titleSuffix: String? = nil
+    var showLogo: Bool = true
+    
+    @ObservedObject private var vip = VipManager.shared
+    
+    var body: some View {
+        HStack {
+        HStack(spacing: 12) {
+            HStack(spacing: 8) {
+                Text("整活局")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                Text(title)
+                    .font(.system(size: 24, weight: .heavy))
+                    .foregroundColor(.themeTextMain)
+                Image.bundle("logo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 24, height: 24)
+                if showLogo {
+                    Image.bundle("logo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 28, height: 28)
+                }
+                if let suffix = titleSuffix {
+                    Text(suffix)
+                        .font(.system(size: 22))
+                }
+            }
+            
+            Spacer()
+            
+            HStack(spacing: 4) {
+                Button(action: {
+                    #if DEBUG
+                    isVip.toggle()
+                    #endif
+                }) {
+                    Image.bundle("vip_icon")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(height: 32)
+                        .grayscale(isVip ? 0.0 : 1.0)
+                        .opacity(isVip ? 1.0 : 0.6)
+            NavigationLink(destination: PayWallView()) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 22)
+                        .fill(vip.isVip ? Color.themePrimary : Color.themePrimary.opacity(0.22))
+                        .frame(width: 80, height: 44)
+                    HStack(spacing: 4) {
+                        Image.bundle("vip_icon")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 24, height: 24)
+                            .grayscale(vip.isVip ? 0.0 : 0.55)
+                            .opacity(vip.isVip ? 1.0 : 0.85)
+                        Text("VIP")
+                            .font(.system(size: 14, weight: .heavy))
+                            .foregroundColor(.themeTextMain)
+                    }
+                }
+                
+                Button(action: {
+                    // Settings action
+                }) {
+            }
+            .buttonStyle(PlainButtonStyle())
+            
+            NavigationLink(destination: SettingsView()) {
+                ZStack {
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: 44, height: 44)
+                        .shadow(color: .black.opacity(0.06), radius: 4, x: 0, y: 2)
+                    Image.bundle("settings_icon")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 28, height: 28)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                        .frame(width: 24, height: 24)
+                }
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+        .padding(.horizontal)
+        .padding(.horizontal, 20)
+        .padding(.top, 10)
+    }
+}
+
+ResultCardUI.swift

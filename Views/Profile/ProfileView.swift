@@ -35,18 +35,18 @@ struct ProfileView: View {
             Spacer()
             NavigationLink(destination: PayWallView()) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 22)
+                    RoundedRectangle(cornerRadius: 16)
                         .fill(vip.isVip ? Color.themePrimary : Color.themePrimary.opacity(0.22))
-                        .frame(width: 80, height: 44)
+                        .frame(width: 70, height: 32)
                     HStack(spacing: 4) {
                         Image.bundle("vip_icon")
                             .resizable()
                             .scaledToFit()
-                            .frame(width: 24, height: 24)
+                            .frame(width: 18, height: 18)
                             .grayscale(vip.isVip ? 0.0 : 0.55)
                             .opacity(vip.isVip ? 1.0 : 0.85)
                         Text("VIP")
-                            .font(.system(size: 14, weight: .heavy))
+                            .font(.system(size: 13, weight: .heavy))
                             .foregroundColor(.themeTextMain)
                     }
                 }
@@ -73,14 +73,10 @@ struct ProfileView: View {
     private var userCard: some View {
         NavigationLink(destination: EditProfileView()) {
             HStack(spacing: 14) {
-                Image.bundle(profile.avatarName)
-                    .resizable()
+                AvatarImage(name: profile.avatarName)
                     .scaledToFill()
                     .frame(width: 64, height: 64)
-                    .background(Color.themePrimary.opacity(0.15))
                     .clipShape(Circle())
-                    .overlay(Circle().stroke(Color.white, lineWidth: 3))
-                    .shadow(color: .black.opacity(0.08), radius: 4, x: 0, y: 2)
                 
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 6) {

@@ -40,8 +40,9 @@ final class UserProfileStore: ObservableObject {
     }
     
     private static func generateUserId() -> String {
-        let digits = (0..<8).map { _ in String(Int.random(in: 0...9)) }.joined()
-        return digits
+        let chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        let randomChars = (0..<8).map { _ in String(chars.randomElement()!) }.joined()
+        return randomChars
     }
     
     func resetIdForDebug() {

@@ -6,6 +6,7 @@ struct MyWorksView: View {
     @State private var selectedCategory = "全部"
     @State private var searchKeyword: String = ""
     @State private var showSearch = false
+    @Environment(\.presentationMode) var presentationMode
     
     private let categories = ["全部", "人设卡", "判官", "投票", "趣味", "其他"]
     
@@ -63,6 +64,11 @@ struct MyWorksView: View {
     
     private var headerBar: some View {
         HStack(spacing: 12) {
+            Button(action: { presentationMode.wrappedValue.dismiss() }) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(.themeTextMain)
+            }
             Text("我的作品")
                 .font(.system(size: 22, weight: .heavy))
                 .foregroundColor(.themeTextMain)
@@ -250,16 +256,11 @@ struct WorkCardCell: View {
             Button("删除作品", role: .destructive, action: onDelete)
             Button("取消", role: .cancel) {}
         }
-        .alert(isPresented: $showAlert) {
-            Alert(title: Text("提示"), message: Text(alertMessage), dismissButton: .default(Text("好的")))
-        }
+        .toast(isPresented: $showAlert, message: alertMessage)
     }
     
     private func loadImage() -> UIImage? {
-        if work.imagePath.starts(with: "/") {
-            return UIImage(contentsOfFile: work.imagePath)
-        }
-        return nil
+        return ImageExportManager.shared.loadImage(from: work.imagePath)
     }
     
     private func coverPlaceholder() -> String {
