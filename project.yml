@@ -27,3 +27,5 @@ targets:
       CURRENT_PROJECT_VERSION: "1"
       CODE_SIGN_ENTITLEMENTS: "ZhengHuoJu.entitlements"
       INFOPLIST_KEY_API_BASE_URL: "https://zhenghuo.miaogou.site"
+      SWIFT_COMPILATION_MODE: singlefile
+      SWIFT_OPTIMIZATION_LEVEL: "-Onone"

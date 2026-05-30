@@ -1,8 +1,10 @@
 import Foundation
 
-@MainActor
 struct MockData {
-    static var allTemplates: [Template] = [
+    // NOTE: No @MainActor here - it crashes the Swift compiler in WMO mode
+    // when accessed from @State property initializers.
+    
+    static let allTemplatesList: [Template] = [
         Template(id: "persona_card", name: "今日人设卡", category: "人设卡", description: "生成你今天的专属人设", coverImage: "cover_persona", isVip: false, usageCount: 24, tags: ["日常", "整活"], fields: []),
         Template(id: "group_judge", name: "群聊判官", category: "判官", description: "看看谁该请奶茶", coverImage: "cover_judge", isVip: false, usageCount: 15, tags: ["群聊", "互动"], fields: []),
         Template(id: "friend_vote", name: "好友投票局", category: "投票", description: "看看谁最会...", coverImage: "cover_vote", isVip: false, usageCount: 18, tags: ["投票", "好友"], fields: []),
@@ -13,6 +15,8 @@ struct MockData {
         Template(id: "boss_card", name: "谁最像老板？", category: "投票", description: "天生老板命", coverImage: "cover_boss", isVip: false, usageCount: 7, tags: ["职场"], fields: []),
         Template(id: "office_survival", name: "办公室生存大师", category: "人设卡", description: "生成你的专属办公室人设", coverImage: "cover_persona", isVip: false, usageCount: 12, tags: ["职场", "打工人"], fields: [])
     ]
+    
+    static var allTemplates: [Template] = allTemplatesList
     
     static var hotTemplates: [Template] {
         Array(allTemplates.filter { $0.category == "投票" }.prefix(4))
@@ -30,9 +34,9 @@ struct MockData {
     }
     
     static func updateUsageCounts(from remoteTemplates: [RemoteTemplate]) {
-        for (index, template) in allTemplates.enumerated() {
-            if let remote = remoteTemplates.first(where: { $0.id == template.id }) {
-                allTemplates[index].usageCount = remote.usageCount
+        for i in 0..<allTemplates.count {
+            if let remote = remoteTemplates.first(where: { $0.id == allTemplates[i].id }) {
+                allTemplates[i].usageCount = remote.usageCount
             }
         }
     }
