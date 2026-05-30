@@ -88,14 +88,14 @@ struct PublishWorkView: View {
     
     private func publish() {
         isPublishing = true
-        
+
         guard let imageData = image.jpegData(compressionQuality: 0.8) else {
             alertMsg = "图片处理失败"
             showAlert = true
             isPublishing = false
             return
         }
-        
+
         Task {
             do {
                 let success = try await PublicWorksService.shared.publishWork(
@@ -107,7 +107,7 @@ struct PublishWorkView: View {
                     category: template.category,
                     imageData: imageData
                 )
-                
+
                 await MainActor.run {
                     isPublishing = false
                     if success {
@@ -120,6 +120,12 @@ struct PublishWorkView: View {
                         alertMsg = "发布失败，请重试"
                         showAlert = true
                     }
+                }
+            } catch let error as APIError {
+                await MainActor.run {
+                    isPublishing = false
+                    alertMsg = "发布失败：\(error.errorDescription ?? "未知错误")"
+                    showAlert = true
                 }
             } catch {
                 await MainActor.run {

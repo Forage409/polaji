@@ -185,16 +185,29 @@ export default {
             
             // ---- PROTECTED WORKS ENDPOINTS ----
             if (path === "/api/works" && method === "POST") {
-                const body: any = await request.json();
-                const tagsStr = JSON.stringify(body.tags || []);
-                await env.DB.prepare(`
-                    INSERT INTO works (id, template_id, title, description, is_anonymous, author_id, author_name, author_avatar, tags, category, image_url, like_count)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
-                `).bind(
-                    body.id, body.templateId, body.title, body.description, body.isAnonymous ? 1 : 0,
-                    userId, body.authorName, body.authorAvatar || '', tagsStr, body.category || '', body.imageUrl || ''
-                ).run();
-                return Response.json({ success: true }, { headers: corsHeaders });
+                try {
+                    const body: any = await request.json();
+                    console.log("Publishing work:", { id: body.id, title: body.title, userId });
+
+                    const tagsStr = JSON.stringify(body.tags || []);
+                    await env.DB.prepare(`
+                        INSERT INTO works (id, template_id, title, description, is_anonymous, author_id, author_name, author_avatar, tags, category, image_url, like_count)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+                    `).bind(
+                        body.id, body.templateId, body.title, body.description, body.isAnonymous ? 1 : 0,
+                        userId, body.authorName, body.authorAvatar || '', tagsStr, body.category || '', body.imageUrl || ''
+                    ).run();
+
+                    console.log("Work published successfully:", body.id);
+                    return Response.json({ success: true }, { headers: corsHeaders });
+                } catch (err: any) {
+                    console.error("Failed to publish work:", err);
+                    return Response.json({
+                        error: "Failed to publish work",
+                        details: err.message,
+                        code: "PUBLISH_FAILED"
+                    }, { status: 500, headers: corsHeaders });
+                }
             }
             
             if (workDetailMatch && method === "DELETE") {
@@ -212,30 +225,47 @@ export default {
             }
             
             if (path === "/api/upload" && method === "POST") {
-                const contentType = request.headers.get("Content-Type") || "image/jpeg";
-                const imageData = await request.arrayBuffer();
+                try {
+                    const contentType = request.headers.get("Content-Type") || "image/jpeg";
+                    const imageData = await request.arrayBuffer();
 
-                // Generate unique filename
-                const timestamp = Date.now();
-                const randomStr = Math.random().toString(36).substring(2, 15);
-                const ext = contentType.includes("png") ? "png" : "jpg";
-                const filename = `works/${timestamp}-${randomStr}.${ext}`;
+                    console.log("Uploading image:", { contentType, size: imageData.byteLength });
 
-                // Upload to R2
-                await env.BUCKET.put(filename, imageData, {
-                    httpMetadata: {
-                        contentType: contentType
-                    }
-                });
+                    // Generate unique filename
+                    const timestamp = Date.now();
+                    const randomStr = Math.random().toString(36).substring(2, 15);
+                    const ext = contentType.includes("png") ? "png" : "jpg";
+                    const filename = `works/${timestamp}-${randomStr}.${ext}`;
 
-                // Return public URL (adjust domain as needed)
-                const publicUrl = `https://r2.zhenghuoju.com/${filename}`;
-                return new Response(publicUrl, { headers: corsHeaders });
+                    // Upload to R2
+                    await env.BUCKET.put(filename, imageData, {
+                        httpMetadata: {
+                            contentType: contentType
+                        }
+                    });
+
+                    // Return public URL (adjust domain as needed)
+                    const publicUrl = `https://r2.zhenghuoju.com/${filename}`;
+                    console.log("Image uploaded successfully:", publicUrl);
+                    return new Response(publicUrl, { headers: corsHeaders });
+                } catch (err: any) {
+                    console.error("Failed to upload image:", err);
+                    return Response.json({
+                        error: "Failed to upload image",
+                        details: err.message,
+                        code: "UPLOAD_FAILED"
+                    }, { status: 500, headers: corsHeaders });
+                }
             }
             
             return Response.json({ error: "Not found" }, { status: 404, headers: corsHeaders });
         } catch (e: any) {
-            return Response.json({ error: e.message }, { status: 500, headers: corsHeaders });
+            console.error("API Error:", e);
+            return Response.json({
+                error: e.message || "Internal server error",
+                details: e.stack || "",
+                timestamp: new Date().toISOString()
+            }, { status: 500, headers: corsHeaders });
         }
     },
 };

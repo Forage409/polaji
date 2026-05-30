@@ -63,12 +63,12 @@ class APIClient {
     }
     
     func performActionRequest(request: URLRequest) async throws -> Bool {
-        let (_, response) = try await URLSession.shared.data(for: request)
-        
+        let (data, response) = try await URLSession.shared.data(for: request)
+
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.networkError(NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "无效的响应"]))
         }
-        
+
         switch httpResponse.statusCode {
         case 200...299:
             return true
@@ -77,7 +77,13 @@ class APIClient {
         case 404:
             throw APIError.notFound
         case 500...599:
-            throw APIError.serverError
+            // Try to parse error details from response
+            if let errorJson = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let errorMsg = errorJson["error"] as? String,
+               let details = errorJson["details"] as? String {
+                throw APIError.serverError(message: "\(errorMsg): \(details)")
+            }
+            throw APIError.serverError(message: nil)
         default:
             throw APIError.unknown(statusCode: httpResponse.statusCode)
         }
@@ -85,13 +91,13 @@ class APIClient {
     
     func upload(path: String, data: Data, contentType: String) async throws -> String {
         let request = try createRequest(path: path, method: "POST", body: data, headers: ["Content-Type": contentType])
-        
+
         let (responseData, response) = try await URLSession.shared.data(for: request)
-        
+
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.networkError(NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "无效的响应"]))
         }
-        
+
         switch httpResponse.statusCode {
         case 200...299:
             if let urlStr = String(data: responseData, encoding: .utf8) {
@@ -104,7 +110,13 @@ class APIClient {
         case 404:
             throw APIError.notFound
         case 500...599:
-            throw APIError.serverError
+            // Try to parse error details from response
+            if let errorJson = try? JSONSerialization.jsonObject(with: responseData) as? [String: Any],
+               let errorMsg = errorJson["error"] as? String,
+               let details = errorJson["details"] as? String {
+                throw APIError.serverError(message: "\(errorMsg): \(details)")
+            }
+            throw APIError.serverError(message: "图片上传失败")
         default:
             throw APIError.unknown(statusCode: httpResponse.statusCode)
         }
