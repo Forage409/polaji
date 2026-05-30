@@ -43,8 +43,8 @@ struct DiscoverView: View {
 
 // MARK: - Templates Waterfall
 struct TemplatesWaterfallView: View {
-    @State private var templates: [Template] = []
-    @State private var isLoading = true
+    @State private var templates: [Template] = MockData.allTemplates
+    @State private var isLoading = false
     @State private var hasError = false
     
     let columns = [
@@ -54,20 +54,9 @@ struct TemplatesWaterfallView: View {
     
     var body: some View {
         Group {
-            if isLoading {
+            if isLoading && templates.isEmpty {
                 ProgressView("加载中...")
                     .padding(.top, 50)
-            } else if hasError {
-                VStack(spacing: 12) {
-                    Image(systemName: "exclamationmark.triangle")
-                        .font(.system(size: 40))
-                        .foregroundColor(.gray)
-                    Text("网络开小差了")
-                        .foregroundColor(.themeTextSecondary)
-                    Button("重试") { loadData() }
-                        .foregroundColor(.themePrimary)
-                }
-                .padding(.top, 80)
             } else if templates.isEmpty {
                 VStack(spacing: 12) {
                     Image(systemName: "sparkles.rectangle.stack")
@@ -93,9 +82,7 @@ struct TemplatesWaterfallView: View {
             }
         }
         .onAppear {
-            if templates.isEmpty {
-                loadData()
-            }
+            loadData()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshFeed"))) { _ in
             loadData()
@@ -103,31 +90,17 @@ struct TemplatesWaterfallView: View {
     }
     
     private func loadData() {
-        isLoading = true
-        hasError = false
         Task {
             do {
                 let fetched = try await RemoteTemplateService.shared.fetchTemplates()
                 await MainActor.run {
-                    self.isLoading = false
-                    self.templates = fetched.map { rt in
-                        Template(
-                            id: rt.id,
-                            name: rt.title,
-                            category: rt.category,
-                            description: rt.description,
-                            coverImage: rt.coverImage,
-                            isVip: false,
-                            usageCount: rt.usageCount,
-                            tags: [],
-                            fields: []
-                        )
-                    }
+                    MockData.updateUsageCounts(from: fetched)
+                    self.templates = MockData.allTemplates
                 }
             } catch {
+                print("Failed to load real templates: \(error)")
                 await MainActor.run {
-                    self.isLoading = false
-                    self.hasError = true
+                    self.templates = MockData.allTemplates
                 }
             }
         }

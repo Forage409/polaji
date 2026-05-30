@@ -90,22 +90,14 @@ struct TemplatesView: View {
             do {
                 let fetched = try await RemoteTemplateService.shared.fetchTemplates()
                 await MainActor.run {
-                    self.allTemplates = fetched.map { rt in
-                        Template(
-                            id: rt.id,
-                            name: rt.title,
-                            category: rt.category,
-                            description: rt.description,
-                            coverImage: rt.coverImage,
-                            isVip: false,
-                            usageCount: rt.usageCount,
-                            tags: [],
-                            fields: []
-                        )
-                    }
+                    MockData.updateUsageCounts(from: fetched)
+                    self.allTemplates = MockData.allTemplates
                 }
             } catch {
                 print("Failed to load templates: \(error)")
+                await MainActor.run {
+                    self.allTemplates = MockData.allTemplates
+                }
             }
         }
     }

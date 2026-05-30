@@ -8,8 +8,6 @@ struct QuickActionsScrollView: View {
         ("真心话大冒险", "icon_truth_dare", "truth_dare")
     ]
     
-    let templates: [Template]
-    
     var body: some View {
         HStack(spacing: 0) {
             ForEach(0..<actions.count, id: \.self) { index in
@@ -50,6 +48,6 @@ struct QuickActionsScrollView: View {
     }
     
     func getTemplate(for id: String) -> Template? {
-        return templates.first(where: { $0.id == id })
+        return MockData.allTemplates.first(where: { $0.id == id })
     }
 }
