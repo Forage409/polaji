@@ -29,13 +29,13 @@ CREATE TABLE IF NOT EXISTS works (
     template_id TEXT NOT NULL,
     title TEXT NOT NULL,
     description TEXT,
-    image_url TEXT NOT NULL,
+    is_anonymous INTEGER DEFAULT 0,
     author_id TEXT,
     author_name TEXT,
     author_avatar TEXT,
     tags TEXT,
     category TEXT,
-    is_anonymous INTEGER DEFAULT 0,
+    image_url TEXT NOT NULL,
     like_count INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
