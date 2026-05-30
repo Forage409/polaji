@@ -167,5 +167,3 @@ struct EditProfileView: View {
         presentationMode.wrappedValue.dismiss()
     }
 }
-
-FeedbackView.swift

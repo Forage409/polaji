@@ -265,5 +265,3 @@ struct ProfileView: View {
             .padding(.leading, 66)
     }
 }
-
-ResultView.swift

@@ -290,5 +290,3 @@ struct WorkCardCell: View {
         ImageExportManager.shared.shareImage(img)
     }
 }
-
-PayWallView.swift

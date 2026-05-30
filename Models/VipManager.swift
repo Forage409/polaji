@@ -62,5 +62,3 @@ final class VipManager: ObservableObject {
         return "永久会员"
     }
 }
-
-WorksStore.swift

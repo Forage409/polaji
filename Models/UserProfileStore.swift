@@ -48,5 +48,3 @@ final class UserProfileStore: ObservableObject {
         userId = UserProfileStore.generateUserId()
     }
 }
-
-VipManager.swift

@@ -96,5 +96,3 @@ struct InviteCodeView: View {
         .cornerRadius(14)
     }
 }
-
-MyOrdersView.swift

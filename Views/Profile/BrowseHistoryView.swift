@@ -123,5 +123,3 @@ struct BrowseHistoryView: View {
         return f.string(from: date)
     }
 }
-
-EditProfileView.swift

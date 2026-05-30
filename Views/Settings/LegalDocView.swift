@@ -1,28 +1,28 @@
 import SwiftUI
- 
+
 enum LegalDocKind {
     case privacy
     case terms
-    
+
     var title: String {
         switch self {
         case .privacy: return "隐私政策"
         case .terms: return "用户协议"
         }
     }
-    
+
     var sections: [(String, String)] {
         switch self {
         case .privacy:
             return [
                 ("一、我们收集哪些信息", """
                 整活局 App 在本版本中是一款纯本地运行的工具，我们不会主动收集你的任何个人信息，也不会将数据上传到任何服务器。
- 
+
                 你在 App 内输入的昵称、性别、关键词、判官参与人姓名等内容，仅会用于在你本人的设备上生成卡片，并保存在你的设备本地（UserDefaults 与 Documents 目录），不会以任何形式离开你的手机。
                 """),
                 ("二、相册与照片权限", """
                 当你点击"保存图片"时，整活局会请求"添加到相册"权限，仅用于把你生成的整活卡片写入系统相册。我们不会读取你相册里的其它照片，也不会上传任何图片。
- 
+
                 你可以随时在系统「设置 > 隐私与安全性 > 照片」中关闭该权限。
                 """),
                 ("三、通知权限", """
@@ -66,10 +66,10 @@ enum LegalDocKind {
         }
     }
 }
- 
+
 struct LegalDocView: View {
     let kind: LegalDocKind
-    
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
@@ -79,7 +79,7 @@ struct LegalDocView: View {
                 Text("生效日期：2026 年 5 月 30 日")
                     .font(.system(size: 12))
                     .foregroundColor(.themeTextSecondary)
-                
+
                 ForEach(0..<kind.sections.count, id: \.self) { idx in
                     let section = kind.sections[idx]
                     VStack(alignment: .leading, spacing: 8) {
@@ -107,5 +107,3 @@ struct LegalDocView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 }
-
-NotificationSettingsView.swift

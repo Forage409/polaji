@@ -106,5 +106,3 @@ struct AboutView: View {
         .contentShape(Rectangle())
     }
 }
-
-LegalDocView.swift

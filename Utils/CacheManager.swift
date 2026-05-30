@@ -56,5 +56,3 @@ enum CacheManager {
         return size
     }
 }
-
-ImageExportManager.swift

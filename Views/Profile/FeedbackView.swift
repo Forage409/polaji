@@ -194,5 +194,3 @@ struct FeedbackView: View {
         }
     }
 }
-
-InviteCodeView.swift

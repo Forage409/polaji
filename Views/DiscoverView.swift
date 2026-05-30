@@ -249,5 +249,3 @@ struct DiscoverView: View {
         return "\(count)"
     }
 }
-
-HomeView.swift

@@ -183,5 +183,3 @@ struct SettingsView: View {
         }
     }
 }
-
-TemplateDetailView.swift

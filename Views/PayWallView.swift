@@ -258,5 +258,3 @@ struct PayWallView: View {
         }
     }
 }
-
-BrowseHistoryView.swift

@@ -129,5 +129,3 @@ struct MyOrdersView: View {
         )
     }
 }
-
-ProfileView.swift
