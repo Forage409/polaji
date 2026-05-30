@@ -41,10 +41,16 @@ struct WorksFeedView: View {
     }
     
     private func loadWorks() {
-        PublicWorksService.shared.fetchWorksFeed { result in
-            isLoading = false
-            if let fetched = result {
-                self.works = fetched
+        Task {
+            do {
+                let fetched = try await PublicWorksService.shared.fetchWorksFeed()
+                await MainActor.run {
+                    self.isLoading = false
+                    self.works = fetched
+                }
+            } catch {
+                await MainActor.run { self.isLoading = false }
+                print("Failed to load works: \(error)")
             }
         }
     }

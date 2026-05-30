@@ -96,25 +96,37 @@ struct PublishWorkView: View {
             return
         }
         
-        PublicWorksService.shared.publishWork(
-            title: title,
-            description: description,
-            isAnonymous: isAnonymous,
-            tags: template.tags,
-            templateId: template.id,
-            category: template.category,
-            imageData: imageData
-        ) { success in
-            isPublishing = false
-            if success {
-                alertMsg = "发布成功！"
-                showAlert = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                    presentationMode.wrappedValue.dismiss()
+        Task {
+            do {
+                let success = try await PublicWorksService.shared.publishWork(
+                    title: title,
+                    description: description,
+                    isAnonymous: isAnonymous,
+                    tags: template.tags,
+                    templateId: template.id,
+                    category: template.category,
+                    imageData: imageData
+                )
+                
+                await MainActor.run {
+                    isPublishing = false
+                    if success {
+                        alertMsg = "发布成功！"
+                        showAlert = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                            presentationMode.wrappedValue.dismiss()
+                        }
+                    } else {
+                        alertMsg = "发布失败，请重试"
+                        showAlert = true
+                    }
                 }
-            } else {
-                alertMsg = "发布失败，请重试"
-                showAlert = true
+            } catch {
+                await MainActor.run {
+                    isPublishing = false
+                    alertMsg = "发布失败：\(error.localizedDescription)"
+                    showAlert = true
+                }
             }
         }
     }

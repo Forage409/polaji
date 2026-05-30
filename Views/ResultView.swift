@@ -104,7 +104,9 @@ struct ResultView: View {
     private func generateCard() {
         generatedCard = CardGenerator.shared.generate(templateId: template.id, inputs: currentInputs)
         if generatedCard != nil {
-            RemoteTemplateService.shared.sendTemplateEvent(templateId: template.id, eventType: "template_generate")
+            Task {
+                try? await RemoteTemplateService.shared.sendTemplateEvent(templateId: template.id, eventType: "template_generate")
+            }
         }
     }
     
@@ -147,6 +149,8 @@ struct ResultView: View {
     private func shareImage() {
         guard let image = getRenderedImage() else { return }
         ImageExportManager.shared.shareImage(image)
-        RemoteTemplateService.shared.sendTemplateEvent(templateId: template.id, eventType: "template_share")
+        Task {
+            try? await RemoteTemplateService.shared.sendTemplateEvent(templateId: template.id, eventType: "template_share")
+        }
     }
 }

@@ -76,7 +76,9 @@ struct TemplateDetailView: View {
             
             VStack {
                 NavigationLink(destination: GenerateFormView(template: template).onAppear {
-                    RemoteTemplateService.shared.sendTemplateEvent(templateId: template.id, eventType: "template_start")
+                    Task {
+                        try? await RemoteTemplateService.shared.sendTemplateEvent(templateId: template.id, eventType: "template_start")
+                    }
                 }) {
                     Text("立即生成")
                         .font(.system(size: 18, weight: .bold))
@@ -97,7 +99,9 @@ struct TemplateDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             BrowseHistoryStore.shared.record(template: template)
-            RemoteTemplateService.shared.sendTemplateEvent(templateId: template.id, eventType: "template_view")
+            Task {
+                try? await RemoteTemplateService.shared.sendTemplateEvent(templateId: template.id, eventType: "template_view")
+            }
         }
     }
 }

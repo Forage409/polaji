@@ -51,11 +51,9 @@ struct GenerateFormView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { setDefaultValues() }
         .toast(isPresented: $showAlert, message: alertMessage)
-        .background(
-            NavigationLink(destination: ResultView(template: template, inputs: buildInputs()), isActive: $navigateToResult) {
-                EmptyView()
-            }
-        )
+        .navigationDestination(isPresented: $navigateToResult) {
+            ResultView(template: template, inputs: buildInputs())
+        }
     }
     
     @State private var navigateToResult = false

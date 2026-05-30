@@ -28,21 +28,26 @@ struct HomeView: View {
         .onAppear {
             store.refresh()
             if hotTemplates.isEmpty {
-                RemoteTemplateService.shared.fetchFeaturedTemplates { fetched in
-                    if let fetched = fetched {
-                        self.hotTemplates = fetched.map { rt in
-                            Template(
-                                id: rt.id,
-                                name: rt.title,
-                                category: rt.category,
-                                description: rt.description,
-                                coverImage: rt.coverImage,
-                                isVip: false,
-                                usageCount: rt.usageCount,
-                                tags: [],
-                                fields: []
-                            )
+                Task {
+                    do {
+                        let fetched = try await RemoteTemplateService.shared.fetchFeaturedTemplates()
+                        await MainActor.run {
+                            self.hotTemplates = fetched.map { rt in
+                                Template(
+                                    id: rt.id,
+                                    name: rt.title,
+                                    category: rt.category,
+                                    description: rt.description,
+                                    coverImage: rt.coverImage,
+                                    isVip: false,
+                                    usageCount: rt.usageCount,
+                                    tags: [],
+                                    fields: []
+                                )
+                            }
                         }
+                    } catch {
+                        print("Failed to fetch featured templates: \(error)")
                     }
                 }
             }

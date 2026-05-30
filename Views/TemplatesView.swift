@@ -86,21 +86,26 @@ struct TemplatesView: View {
     }
     
     private func loadData() {
-        RemoteTemplateService.shared.fetchTemplates { fetched in
-            if let fetched = fetched {
-                self.allTemplates = fetched.map { rt in
-                    Template(
-                        id: rt.id,
-                        name: rt.title,
-                        category: rt.category,
-                        description: rt.description,
-                        coverImage: rt.coverImage,
-                        isVip: false,
-                        usageCount: rt.usageCount,
-                        tags: [],
-                        fields: []
-                    )
+        Task {
+            do {
+                let fetched = try await RemoteTemplateService.shared.fetchTemplates()
+                await MainActor.run {
+                    self.allTemplates = fetched.map { rt in
+                        Template(
+                            id: rt.id,
+                            name: rt.title,
+                            category: rt.category,
+                            description: rt.description,
+                            coverImage: rt.coverImage,
+                            isVip: false,
+                            usageCount: rt.usageCount,
+                            tags: [],
+                            fields: []
+                        )
+                    }
                 }
+            } catch {
+                print("Failed to load templates: \(error)")
             }
         }
     }
