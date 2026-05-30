@@ -68,5 +68,8 @@ struct TemplateDetailView: View {
         }
         .background(Color.themeBackground.edgesIgnoringSafeArea(.all))
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            BrowseHistoryStore.shared.record(template: template)
+        }
     }
 }

@@ -13,7 +13,18 @@ class ImageExportManager {
         
         let renderer = ImageRenderer(content: exportView)
         renderer.scale = UIScreen.main.scale
+        renderer.isOpaque = true
         return renderer.uiImage
+    }
+    
+    @MainActor
+    func renderPNG<V: View>(from view: V, size: CGSize) -> Data? {
+        let exportView = view
+            .frame(width: size.width, height: size.height)
+        let renderer = ImageRenderer(content: exportView)
+        renderer.scale = UIScreen.main.scale
+        renderer.isOpaque = false
+        return renderer.uiImage?.pngData()
     }
     
     func saveImageToPhotos(_ image: UIImage, completion: @escaping (Bool) -> Void) {

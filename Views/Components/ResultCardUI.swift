@@ -2,6 +2,8 @@ import SwiftUI
 
 struct ResultCardUI: View {
     let card: GeneratedCard
+    var exportMode: Bool = false
+    var showWatermark: Bool = false
     
     var body: some View {
         VStack(spacing: 0) {
@@ -66,10 +68,25 @@ struct ResultCardUI: View {
                 }
                 .padding(24)
             }
+            
+            if showWatermark {
+                HStack(spacing: 6) {
+                    Image.bundle("logo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 16, height: 16)
+                    Text("整活局生成 · zhenghuoju.com")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(headerTextColor.opacity(0.6))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(Color.white.opacity(0.4))
+            }
         }
-        .frame(width: 350, height: 520, alignment: .top)
-        .cornerRadius(24)
-        .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
+        .frame(width: 350, height: showWatermark ? 560 : 520, alignment: .top)
+        .cornerRadius(exportMode ? 0 : 24)
+        .shadow(color: exportMode ? .clear : .black.opacity(0.15), radius: exportMode ? 0 : 20, x: 0, y: exportMode ? 0 : 10)
     }
     
     // MARK: - Layouts

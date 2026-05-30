@@ -6,7 +6,6 @@ struct ResultView: View {
     
     @State private var currentInputs: [String: String] = [:]
     @State private var generatedCard: GeneratedCard?
-    @StateObject private var store = WorksStore()
     @Environment(\.presentationMode) var presentationMode
     @State private var showingAlert = false
     @State private var alertMessage = ""
@@ -102,8 +101,10 @@ struct ResultView: View {
     
     private func getRenderedImage() -> UIImage? {
         guard let card = generatedCard else { return nil }
-        let uiView = ResultCardUI(card: card)
-        return ImageExportManager.shared.renderImage(from: uiView, size: CGSize(width: 350, height: 520))
+        let isVip = VipManager.shared.isVip
+        let uiView = ResultCardUI(card: card, exportMode: true, showWatermark: !isVip)
+        let height: CGFloat = !isVip ? 560 : 520
+        return ImageExportManager.shared.renderImage(from: uiView, size: CGSize(width: 350, height: height))
     }
     
     private func saveImageAndWork() {
@@ -113,7 +114,7 @@ struct ResultView: View {
             if success {
                 if let savedPath = ImageExportManager.shared.saveImageToDocuments(image, fileName: "\(card.id).jpg") {
                     let work = Work(id: card.id, templateId: template.id, title: card.title, imagePath: savedPath, createdAt: card.createdAt, category: template.category, isShared: false)
-                    store.saveWork(work)
+                    WorksStore.shared.saveWork(work)
                     alertMessage = "保存成功，已存入相册和我的作品！"
                 } else {
                     alertMessage = "保存图片文件失败"
