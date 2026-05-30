@@ -20,7 +20,9 @@ struct HeaderView: View {
             
             HStack(spacing: 4) {
                 Button(action: {
+                    #if DEBUG
                     isVip.toggle()
+                    #endif
                 }) {
                     Image.bundle("vip_icon")
                         .resizable()
