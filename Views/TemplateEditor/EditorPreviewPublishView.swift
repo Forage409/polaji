@@ -104,43 +104,53 @@ struct EditorPreviewPublishView: View {
             return
         }
         
-        RemoteTemplateService.shared.uploadCover(imageData: imageData) { coverUrl in
-            let finalCoverUrl = coverUrl ?? "https://r2.zhenghuoju.com/default_cover.jpg" // Fallback if upload fails, but real URL ideally
-            
-            let draftTemplate = RemoteTemplate(
-                id: UUID().uuidString,
-                title: self.draft.title,
-                description: self.draft.description,
-                coverImage: finalCoverUrl,
-                category: self.draft.category,
-                authorId: UserProfileStore.shared.userId,
-                authorName: UserProfileStore.shared.nickname,
-                viewCount: 0,
-                startCount: 0,
-                generateCount: 0,
-                usageCount: 0,
-                shareCount: 0,
-                likeCount: 0,
-                reportCount: 0,
-                status: "published",
-                createdAt: "",
-                updatedAt: "",
-                formConfigRaw: nil,
-                resultConfigRaw: nil
-            )
-            
-            RemoteTemplateService.shared.createTemplate(draft: draftTemplate) { success in
-                self.isPublishing = false
-                if success {
-                    self.alertMsg = "发布成功！"
-                    self.showAlert = true
-                    // Refresh feed locally (since DiscoverView reloads on this notification)
-                    NotificationCenter.default.post(name: NSNotification.Name("RefreshFeed"), object: nil)
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                        self.presentationMode.wrappedValue.dismiss()
+        Task {
+            do {
+                let coverUrl = try await RemoteTemplateService.shared.uploadCover(imageData: imageData)
+                let finalCoverUrl = coverUrl
+                
+                let draftTemplate = RemoteTemplate(
+                    id: UUID().uuidString,
+                    title: self.draft.title,
+                    description: self.draft.description,
+                    coverImage: finalCoverUrl,
+                    category: self.draft.category,
+                    authorId: UserProfileStore.shared.userId,
+                    authorName: UserProfileStore.shared.nickname,
+                    viewCount: 0,
+                    startCount: 0,
+                    generateCount: 0,
+                    usageCount: 0,
+                    shareCount: 0,
+                    likeCount: 0,
+                    reportCount: 0,
+                    status: "published",
+                    createdAt: "",
+                    updatedAt: "",
+                    formConfigRaw: nil,
+                    resultConfigRaw: nil
+                )
+                
+                let success = try await RemoteTemplateService.shared.createTemplate(draft: draftTemplate)
+                
+                await MainActor.run {
+                    self.isPublishing = false
+                    if success {
+                        self.alertMsg = "发布成功！"
+                        self.showAlert = true
+                        NotificationCenter.default.post(name: NSNotification.Name("RefreshFeed"), object: nil)
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                            self.presentationMode.wrappedValue.dismiss()
+                        }
+                    } else {
+                        self.alertMsg = "发布失败，请检查网络"
+                        self.showAlert = true
                     }
-                } else {
-                    self.alertMsg = "发布失败，请检查网络"
+                }
+            } catch {
+                await MainActor.run {
+                    self.isPublishing = false
+                    self.alertMsg = "发布失败：\(error.localizedDescription)"
                     self.showAlert = true
                 }
             }
