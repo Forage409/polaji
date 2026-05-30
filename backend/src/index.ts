@@ -196,13 +196,27 @@ export default {
                     const body: any = await request.json();
                     console.log("Publishing work:", { id: body.id, title: body.title, userId });
 
-                    const tagsStr = JSON.stringify(body.tags || []);
+                    // Ensure all fields have valid values (no undefined)
+                    const workData = {
+                        id: body.id || '',
+                        templateId: body.templateId || '',
+                        title: body.title || '',
+                        description: body.description || '',
+                        isAnonymous: body.isAnonymous ? 1 : 0,
+                        authorId: userId || '',
+                        authorName: body.authorName || '',
+                        authorAvatar: body.authorAvatar || '',
+                        tags: JSON.stringify(body.tags || []),
+                        category: body.category || '',
+                        imageUrl: body.imageUrl || ''
+                    };
+
                     await env.DB.prepare(`
                         INSERT INTO works (id, template_id, title, description, is_anonymous, author_id, author_name, author_avatar, tags, category, image_url, like_count)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
                     `).bind(
-                        body.id, body.templateId, body.title, body.description, body.isAnonymous ? 1 : 0,
-                        userId, body.authorName, body.authorAvatar || '', tagsStr, body.category || '', body.imageUrl || ''
+                        workData.id, workData.templateId, workData.title, workData.description, workData.isAnonymous,
+                        workData.authorId, workData.authorName, workData.authorAvatar, workData.tags, workData.category, workData.imageUrl
                     ).run();
 
                     console.log("Work published successfully:", body.id);
