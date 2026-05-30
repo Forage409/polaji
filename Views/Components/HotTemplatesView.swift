@@ -32,7 +32,7 @@ struct HotTemplatesView: View {
                                 Image(systemName: "flame.fill")
                                     .foregroundColor(.red)
                                     .font(.system(size: 10))
-                                Text("\\(String(format: "%.1f", Double(template.usageCount)/10000.0))w")
+                                Text("\(String(format: "%.1f", Double(template.usageCount)/10000.0))w")
                                     .font(.system(size: 10, weight: .medium))
                                     .foregroundColor(.themeTextSecondary)
                             }
