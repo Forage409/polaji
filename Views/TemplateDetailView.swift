@@ -7,7 +7,7 @@ struct TemplateDetailView: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    Image(template.coverImage)
+                    Image.bundle(template.coverImage)
                         .resizable()
                         .scaledToFit()
                         .frame(maxWidth: .infinity)

@@ -1,4 +1,4 @@
-﻿import Foundation
+import Foundation
 
 struct StatItem: Codable, Identifiable {
     var id = UUID()
@@ -14,5 +14,11 @@ struct GeneratedCard: Codable, Identifiable {
     let mainImageName: String
     let stats: [StatItem]
     let quote: String
+    let evidenceList: [String]
+    let resultLevel: String
+    let finalComment: String
+    let styleTone: String
+    let participants: [String]
+    let templateType: String
     let createdAt: String
 }

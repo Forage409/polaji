@@ -20,12 +20,12 @@ struct HeaderView: View {
                 Image.bundle("vip_icon")
                     .resizable()
                     .scaledToFit()
-                    .frame(height: 24)
+                    .frame(height: 32)
                 
                 Image.bundle("settings_icon")
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 24, height: 24)
+                    .frame(width: 32, height: 32)
             }
         }
         .padding(.horizontal)

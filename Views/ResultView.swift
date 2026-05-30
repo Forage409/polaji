@@ -2,13 +2,20 @@ import SwiftUI
 
 struct ResultView: View {
     let template: Template
-    let inputs: [String: String]
+    let initialInputs: [String: String]
     
+    @State private var currentInputs: [String: String] = [:]
     @State private var generatedCard: GeneratedCard?
     @StateObject private var store = WorksStore()
     @Environment(\.presentationMode) var presentationMode
     @State private var showingAlert = false
     @State private var alertMessage = ""
+    
+    init(template: Template, inputs: [String: String]) {
+        self.template = template
+        self.initialInputs = inputs
+        _currentInputs = State(initialValue: inputs)
+    }
     
     var body: some View {
         VStack {
@@ -26,20 +33,38 @@ struct ResultView: View {
             }
             
             VStack(spacing: 12) {
-                Button(action: {
-                    generateCard()
-                }) {
-                    Text("重新生成")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(.themeTextMain)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 50)
-                        .background(Color.white)
-                        .cornerRadius(25)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 25)
-                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-                        )
+                HStack(spacing: 12) {
+                    Button(action: {
+                        generateCard()
+                    }) {
+                        Text("换个结果")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.themeTextMain)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 50)
+                            .background(Color.white)
+                            .cornerRadius(25)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 25)
+                                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                            )
+                    }
+                    
+                    Button(action: {
+                        changeTone()
+                    }) {
+                        Text("换个风格")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.themeTextMain)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 50)
+                            .background(Color.white)
+                            .cornerRadius(25)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 25)
+                                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                            )
+                    }
                 }
                 
                 HStack(spacing: 12) {
@@ -71,20 +96,22 @@ struct ResultView: View {
                 Button(action: {
                     presentationMode.wrappedValue.dismiss()
                 }) {
-                    Text("返回")
+                    Text("返回修改")
                         .font(.system(size: 14))
                         .foregroundColor(.themeTextSecondary)
                         .padding(.top, 4)
                 }
             }
             .padding(.horizontal, 20)
-            .padding(.bottom, 30) // Fixed safeAreaInsets deprecation
+            .padding(.bottom, 30)
         }
         .background(Color.themeBackground.edgesIgnoringSafeArea(.all))
         .navigationTitle("生成结果")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
-            generateCard()
+            if generatedCard == nil {
+                generateCard()
+            }
         }
         .alert(isPresented: $showingAlert) {
             Alert(title: Text("提示"), message: Text(alertMessage), dismissButton: .default(Text("确定")))
@@ -92,13 +119,23 @@ struct ResultView: View {
     }
     
     private func generateCard() {
-        generatedCard = CardGenerator.shared.generate(templateId: template.id, inputs: inputs)
+        generatedCard = CardGenerator.shared.generate(templateId: template.id, inputs: currentInputs)
+    }
+    
+    private func changeTone() {
+        let tones = ["正经鉴定", "群聊整活", "毒舌吐槽", "可爱夸夸", "扎心", "搞笑", "离谱判决"]
+        var newTone = tones.randomElement()!
+        while newTone == currentInputs["tone"] {
+            newTone = tones.randomElement()!
+        }
+        currentInputs["tone"] = newTone
+        generateCard()
     }
     
     private func getRenderedImage() -> UIImage? {
         guard let card = generatedCard else { return nil }
         let uiView = ResultCardUI(card: card)
-        return ImageExportManager.shared.renderImage(from: uiView, size: CGSize(width: 350, height: 500))
+        return ImageExportManager.shared.renderImage(from: uiView, size: CGSize(width: 350, height: 520))
     }
     
     private func saveImageAndWork() {

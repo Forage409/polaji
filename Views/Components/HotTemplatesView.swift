@@ -22,32 +22,21 @@ struct HotTemplatesView: View {
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)], spacing: 16) {
                 ForEach(templates) { template in
                     NavigationLink(destination: TemplateDetailView(template: template)) {
-                        VStack(alignment: .leading, spacing: 0) {
+                        VStack(spacing: 8) {
                             Image.bundle(template.coverImage)
                                 .resizable()
-                                .scaledToFill()
-                                .frame(height: 120)
-                                .clipped()
+                                .scaledToFit()
+                                .cornerRadius(12)
                             
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(template.name)
-                                    .font(.system(size: 14, weight: .bold))
-                                    .foregroundColor(.themeTextMain)
-                                    .lineLimit(1)
-                                
-                                HStack {
-                                    Image(systemName: "flame.fill")
-                                        .foregroundColor(.red)
-                                        .font(.system(size: 10))
-                                    Text("\(template.usageCount/1000)k人使用")
-                                        .font(.system(size: 10))
-                                        .foregroundColor(.themeTextSecondary)
-                                }
+                            HStack {
+                                Image(systemName: "flame.fill")
+                                    .foregroundColor(.red)
+                                    .font(.system(size: 10))
+                                Text("\\(String(format: "%.1f", Double(template.usageCount)/10000.0))w")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(.themeTextSecondary)
                             }
-                            .padding(10)
                         }
-                        .background(Color.white)
-                        .cornerRadius(12)
                         .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
                     }
                 }

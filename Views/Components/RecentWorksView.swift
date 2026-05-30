@@ -40,8 +40,7 @@ struct RecentWorksView: View {
                                     if let uiImage = UIImage(contentsOfFile: work.imagePath) {
                                         Image(uiImage: uiImage)
                                             .resizable()
-                                            .scaledToFit()
-                                            .padding(15)
+                                            .scaledToFill()
                                     } else {
                                         Image(systemName: "photo")
                                             .resizable()
@@ -50,14 +49,13 @@ struct RecentWorksView: View {
                                             .foregroundColor(.gray)
                                     }
                                 } else {
-                                    Image(work.imagePath.replacingOccurrences(of: ".png", with: ""))
+                                    Image.bundle(work.imagePath.replacingOccurrences(of: ".png", with: ""))
                                         .resizable()
-                                        .scaledToFit()
-                                        .padding(15)
+                                        .scaledToFill()
                                 }
                             }
                             .frame(height: 120)
-                            .clipped() // Fixed corners issue here
+                            .clipped()
                             
                             HStack {
                                 Text(work.createdAt)
