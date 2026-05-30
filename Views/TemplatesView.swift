@@ -48,7 +48,7 @@ struct TemplatesView: View {
                                     Image.bundle(template.coverImage)
                                         .resizable()
                                         .aspectRatio(3/4, contentMode: .fit)
-                                        .background(Color.gray.opacity(0.1))
+                                        .background(Color.white)
                                         .clipShape(RoundedRectangle(cornerRadius: 12))
                                     
                                     HStack(spacing: 4) {

@@ -12,8 +12,8 @@ struct TemplateDetailView: View {
                         .scaledToFit()
                         .frame(maxWidth: .infinity)
                         .frame(height: 300)
-                        .clipped()
-                        .cornerRadius(16)
+                        .background(Color.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
                         .padding()
                         .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
                     
