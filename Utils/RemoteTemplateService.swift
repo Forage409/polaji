@@ -6,7 +6,7 @@ class RemoteTemplateService {
     
     // Dynamic base URL from Info.plist
     private var baseURL: String {
-        Bundle.main.object(forInfoDictionaryKey: "API_BASE_URL") as? String ?? "https://api.zhenghuoju.com"
+        Bundle.main.object(forInfoDictionaryKey: "API_BASE_URL") as? String ?? "https://zhenghuo.miaogou.site"
     }
     
     private init() {}
