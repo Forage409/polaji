@@ -18,6 +18,11 @@ class WorksStore: ObservableObject {
         persistWorks()
     }
     
+    func deleteWork(id: String) {
+        works.removeAll { $0.id == id }
+        persistWorks()
+    }
+    
     private func loadWorks() {
         if let data = UserDefaults.standard.data(forKey: worksKey) {
             if let decoded = try? JSONDecoder().decode([Work].self, from: data) {
