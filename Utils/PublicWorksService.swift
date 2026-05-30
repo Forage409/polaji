@@ -1,63 +1,23 @@
 import Foundation
-import Combine
 
 class PublicWorksService {
     static let shared = PublicWorksService()
     
-    private var baseURL: String {
-        Bundle.main.object(forInfoDictionaryKey: "API_BASE_URL") as? String ?? "https://zhenghuo.miaogou.site"
-    }
-    
     private init() {}
     
-    func fetchWorksFeed(completion: @escaping ([PublicWork]?) -> Void) {
-        guard let url = URL(string: "\(baseURL)/api/works/feed") else {
-            completion(nil)
-            return
-        }
-        URLSession.shared.dataTask(with: url) { data, response, error in
-            guard let data = data, error == nil else {
-                DispatchQueue.main.async { completion(nil) }
-                return
-            }
-            do {
-                let decoded = try JSONDecoder().decode([PublicWork].self, from: data)
-                DispatchQueue.main.async { completion(decoded) }
-            } catch {
-                print("Failed to decode works feed: \(error)")
-                DispatchQueue.main.async { completion(nil) }
-            }
-        }.resume()
+    func fetchWorksFeed() async throws -> [PublicWork] {
+        let request = try APIClient.shared.createRequest(path: "/api/works/feed")
+        return try await APIClient.shared.performRequest(request: request)
     }
     
-    func fetchWorkDetail(id: String, completion: @escaping (PublicWork?) -> Void) {
-        guard let url = URL(string: "\(baseURL)/api/works/\(id)") else {
-            completion(nil)
-            return
-        }
-        URLSession.shared.dataTask(with: url) { data, response, error in
-            guard let data = data, error == nil else {
-                DispatchQueue.main.async { completion(nil) }
-                return
-            }
-            do {
-                let decoded = try JSONDecoder().decode(PublicWork.self, from: data)
-                DispatchQueue.main.async { completion(decoded) }
-            } catch {
-                DispatchQueue.main.async { completion(nil) }
-            }
-        }.resume()
+    func fetchWorkDetail(id: String) async throws -> PublicWork {
+        let request = try APIClient.shared.createRequest(path: "/api/works/\(id)")
+        return try await APIClient.shared.performRequest(request: request)
     }
     
-    func publishWork(title: String, description: String, isAnonymous: Bool, tags: [String], templateId: String, category: String, imageData: Data, completion: @escaping (Bool) -> Void) {
-        guard let url = URL(string: "\(baseURL)/api/works") else {
-            completion(false)
-            return
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    func publishWork(title: String, description: String, isAnonymous: Bool, tags: [String], templateId: String, category: String, imageData: Data) async throws -> Bool {
+        // Upload image first
+        let imageUrl = try await APIClient.shared.upload(path: "/api/upload", data: imageData, contentType: "image/jpeg")
         
         let payload: [String: Any] = [
             "id": UUID().uuidString,
@@ -70,57 +30,27 @@ class PublicWorksService {
             "authorAvatar": UserProfileStore.shared.avatarName,
             "tags": tags,
             "category": category,
-            "imageUrl": "temp_image_url_needs_backend_upload"
+            "imageUrl": imageUrl
         ]
         
-        request.httpBody = try? JSONSerialization.data(withJSONObject: payload)
-        
-        URLSession.shared.dataTask(with: request) { data, response, error in
-            DispatchQueue.main.async {
-                completion(error == nil && (response as? HTTPURLResponse)?.statusCode == 200)
-            }
-        }.resume()
+        let body = try? JSONSerialization.data(withJSONObject: payload)
+        let request = try APIClient.shared.createRequest(path: "/api/works", method: "POST", body: body)
+        return try await APIClient.shared.performActionRequest(request: request)
     }
     
-    func deleteWork(id: String, completion: @escaping (Bool) -> Void) {
-        guard let url = URL(string: "\(baseURL)/api/works/\(id)") else {
-            completion(false)
-            return
-        }
-        var request = URLRequest(url: url)
-        request.httpMethod = "DELETE"
-        URLSession.shared.dataTask(with: request) { data, response, error in
-            DispatchQueue.main.async {
-                completion(error == nil && (response as? HTTPURLResponse)?.statusCode == 200)
-            }
-        }.resume()
+    func deleteWork(id: String) async throws -> Bool {
+        let request = try APIClient.shared.createRequest(path: "/api/works/\(id)", method: "DELETE")
+        return try await APIClient.shared.performActionRequest(request: request)
     }
     
-    func likeWork(id: String, completion: @escaping (Bool) -> Void) {
-        guard let url = URL(string: "\(baseURL)/api/works/\(id)/like") else {
-            completion(false)
-            return
-        }
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        URLSession.shared.dataTask(with: request) { data, response, error in
-            DispatchQueue.main.async {
-                completion(error == nil && (response as? HTTPURLResponse)?.statusCode == 200)
-            }
-        }.resume()
+    func likeWork(id: String) async throws -> Bool {
+        let request = try APIClient.shared.createRequest(path: "/api/works/\(id)/like", method: "POST")
+        return try await APIClient.shared.performActionRequest(request: request)
     }
     
-    func reportWork(id: String, completion: @escaping (Bool) -> Void) {
-        guard let url = URL(string: "\(baseURL)/api/works/\(id)/report") else {
-            completion(false)
-            return
-        }
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        URLSession.shared.dataTask(with: request) { data, response, error in
-            DispatchQueue.main.async {
-                completion(error == nil && (response as? HTTPURLResponse)?.statusCode == 200)
-            }
-        }.resume()
+    func reportWork(id: String) async throws -> Bool {
+        let request = try APIClient.shared.createRequest(path: "/api/works/\(id)/report", method: "POST")
+        return try await APIClient.shared.performActionRequest(request: request)
     }
 }
+
