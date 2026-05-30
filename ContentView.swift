@@ -26,6 +26,7 @@ struct ContentView: View {
                 CustomTabView(selectedTab: $selectedTab)
             }
             .edgesIgnoringSafeArea(.bottom)
+            .toolbar(.hidden, for: .navigationBar)
         }
     }
 }
