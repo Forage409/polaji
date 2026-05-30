@@ -56,7 +56,7 @@ class APIClient {
         case 404:
             throw APIError.notFound
         case 500...599:
-            throw APIError.serverError
+            throw APIError.serverError(message: nil)
         default:
             throw APIError.unknown(statusCode: httpResponse.statusCode)
         }
