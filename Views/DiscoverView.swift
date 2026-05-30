@@ -66,7 +66,19 @@ struct TemplatesWaterfallView: View {
         .onAppear {
             RemoteTemplateService.shared.fetchTemplates { fetched in
                 if let fetched = fetched, !fetched.isEmpty {
-                    self.templates = fetched
+                    self.templates = fetched.map { rt in
+                        Template(
+                            id: rt.id,
+                            name: rt.title,
+                            category: rt.category,
+                            description: rt.description,
+                            coverImage: rt.coverImage,
+                            isVip: false,
+                            usageCount: rt.usageCount,
+                            tags: [],
+                            fields: []
+                        )
+                    }
                 } else {
                     self.templates = MockData.allTemplates
                 }

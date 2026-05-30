@@ -64,7 +64,7 @@ class CardGenerator {
         let toneInput = inputs["tone"] ?? "默认"
         let multiSelect = (inputs["multiSelect"] ?? "").components(separatedBy: ",").filter { !$0.isEmpty }
         let singleSelect1 = inputs["singleSelect1"] ?? ""
-        let singleSelect2 = inputs["singleSelect2"] ?? ""
+        _ = inputs["singleSelect2"] ?? ""
         let participantsStr = inputs["participants"] ?? ""
         let participants = participantsStr.isEmpty ? [] : participantsStr.components(separatedBy: ",")
         
