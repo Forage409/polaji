@@ -134,9 +134,15 @@ export default {
             if (creatorActionMatch) {
                 const id = creatorActionMatch[1];
                 const action = creatorActionMatch[2];
-                
+
+                // Validate inputs
+                if (!id || !userId) {
+                    console.error("Creator action missing id or userId:", { id, userId, path });
+                    return Response.json({ error: "Invalid request" }, { status: 400, headers: corsHeaders });
+                }
+
                 // Ensure owner
-                const check = await env.DB.prepare("SELECT id FROM templates WHERE id = ? AND author_id = ?").bind(id, userId).first();
+                const check = await env.DB.prepare("SELECT id FROM templates WHERE id = ? AND author_id = ?").bind(String(id), String(userId)).first();
                 if (!check) return Response.json({ error: "Forbidden" }, { status: 403, headers: corsHeaders });
                 
                 if (method === "DELETE" && !action) {
