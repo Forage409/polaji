@@ -85,7 +85,7 @@ struct EditorFormRulesView: View {
 
     // MARK: - Add field grid
     private var addFieldGrid: some View {
-        let cols = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
+        let cols = [GridItem(.adaptive(minimum: 68))]
         return LazyVGrid(columns: cols, spacing: 10) {
             addButton(label: "文本", icon: "textformat", color: Color(red: 1.00, green: 0.85, blue: 0.42)) {
                 addField(.text)
@@ -98,6 +98,9 @@ struct EditorFormRulesView: View {
             }
             addButton(label: "数字", icon: "number", color: Color(red: 0.30, green: 0.75, blue: 0.55)) {
                 addField(.number)
+            }
+            addButton(label: "多人", icon: "person.3.fill", color: Color(red: 0.35, green: 0.62, blue: 0.95)) {
+                addField(.participants)
             }
         }
     }
@@ -127,6 +130,7 @@ struct EditorFormRulesView: View {
     }
 
     private func addField(_ kind: TemplateField.FieldKind) {
+        guard draft.fields.count < TemplateInputLimits.maxFields else { return }
         let defaults: TemplateField
         switch kind {
         case .text:
@@ -252,7 +256,7 @@ private struct FieldEditorCard: View {
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
-                    TextField("填写项名称", text: $field.label)
+                    TextField("填写项名称", text: .limited($field.label, maxLength: TemplateInputLimits.fieldLabel))
                         .font(.system(size: 15, weight: .bold))
                     Text(field.type.displayName)
                         .font(.system(size: 11, weight: .bold))
@@ -296,13 +300,23 @@ private struct FieldEditorCard: View {
                 }
             }
             .pickerStyle(SegmentedPickerStyle())
+            .onChange(of: field.type) { kind in
+                if (kind == .singleSelect || kind == .multiSelect),
+                   field.options.count < TemplateInputLimits.minOptions {
+                    field.options = ["选项 A", "选项 B"]
+                }
+                if kind == .participants {
+                    field.minCount = field.minCount ?? 3
+                    field.maxCount = max(field.minCount ?? 3, field.maxCount ?? 8)
+                }
+            }
 
             // Body per type
             switch field.type {
             case .text, .number:
                 TextField(
                     field.type == .number ? "提示语，如：输入年龄" : "提示语，如：请输入昵称",
-                    text: $field.placeholder
+                    text: .limited($field.placeholder, maxLength: TemplateInputLimits.placeholder)
                 )
                 .padding(10)
                 .background(Color.gray.opacity(0.06))
@@ -330,22 +344,27 @@ private struct FieldEditorCard: View {
 
             ForEach(field.options.indices, id: \.self) { i in
                 HStack {
-                    TextField("选项 \(i + 1)", text: $field.options[i])
+                    TextField("选项 \(i + 1)", text: .limited($field.options[i], maxLength: TemplateInputLimits.option))
                         .padding(8)
                         .background(Color.gray.opacity(0.06))
                         .cornerRadius(6)
                         .font(.system(size: 13))
                     Button(action: {
-                        if i < field.options.count {
+                        if i < field.options.count, field.options.count > TemplateInputLimits.minOptions {
                             field.options.remove(at: i)
                         }
                     }) {
                         Image(systemName: "minus.circle")
                             .foregroundColor(.red.opacity(0.6))
                     }
+                    .disabled(field.options.count <= TemplateInputLimits.minOptions)
                 }
             }
-            Button(action: { field.options.append("新选项") }) {
+            Button(action: {
+                if field.options.count < TemplateInputLimits.maxOptions {
+                    field.options.append("新选项")
+                }
+            }) {
                 HStack(spacing: 4) {
                     Image(systemName: "plus")
                     Text("加选项")
@@ -362,11 +381,25 @@ private struct FieldEditorCard: View {
         HStack(spacing: 12) {
             countStepper(label: "最少", value: Binding(
                 get: { field.minCount ?? 3 },
-                set: { field.minCount = max(1, $0) }
+                set: {
+                    let value = min(
+                        TemplateInputLimits.maxParticipants,
+                        max(TemplateInputLimits.minParticipants, $0)
+                    )
+                    field.minCount = value
+                    if (field.maxCount ?? 8) < value {
+                        field.maxCount = value
+                    }
+                }
             ))
             countStepper(label: "最多", value: Binding(
                 get: { field.maxCount ?? 8 },
-                set: { field.maxCount = max(field.minCount ?? 3, $0) }
+                set: {
+                    field.maxCount = min(
+                        TemplateInputLimits.maxParticipants,
+                        max(field.minCount ?? TemplateInputLimits.minParticipants, $0)
+                    )
+                }
             ))
         }
     }

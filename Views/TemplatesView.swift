@@ -47,8 +47,7 @@ struct TemplatesView: View {
                         ForEach(filteredTemplates) { template in
                             NavigationLink(destination: TemplateDetailView(template: template)) {
                                 ZStack(alignment: .bottomLeading) {
-                                    Image.bundle(template.coverImage)
-                                        .resizable()
+                                    templateCover(template)
                                         .aspectRatio(3/4, contentMode: .fit)
                                         .background(Color.white)
                                         .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -91,7 +90,11 @@ struct TemplatesView: View {
                 let fetched = try await RemoteTemplateService.shared.fetchTemplates()
                 await MainActor.run {
                     MockData.updateUsageCounts(from: fetched)
-                    self.allTemplates = MockData.allTemplates
+                    let mockIds = Set(MockData.allTemplates.map(\.id))
+                    let extras = fetched
+                        .filter { !mockIds.contains($0.id) }
+                        .map { Template(from: $0) }
+                    self.allTemplates = MockData.allTemplates + extras
                 }
             } catch {
                 print("Failed to load templates: \(error)")
@@ -99,6 +102,21 @@ struct TemplatesView: View {
                     self.allTemplates = MockData.allTemplates
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func templateCover(_ template: Template) -> some View {
+        if template.coverImage.hasPrefix("http://") || template.coverImage.hasPrefix("https://") {
+            CachedAsyncImage(url: URL(string: template.coverImage)) { image in
+                image.resizable().scaledToFill()
+            } placeholder: {
+                Color.gray.opacity(0.14)
+            }
+        } else {
+            Image.bundle(template.coverImage)
+                .resizable()
+                .scaledToFill()
         }
     }
 }

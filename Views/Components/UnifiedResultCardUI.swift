@@ -13,6 +13,7 @@ struct UnifiedResultCardUI: View {
             decorationLayer
 
             VStack(alignment: .leading, spacing: 14) {
+                layoutBadge
                 ForEach(document.moduleOrder) { module in
                     if shouldShow(module) {
                         moduleView(module)
@@ -22,6 +23,10 @@ struct UnifiedResultCardUI: View {
             .padding(20)
         }
         .frame(width: 350)
+        .overlay(
+            RoundedRectangle(cornerRadius: exportMode ? 0 : 24)
+                .stroke(borderColor, lineWidth: document.layout == .verdict ? 3 : 1)
+        )
         .clipShape(RoundedRectangle(cornerRadius: exportMode ? 0 : 24))
         .shadow(color: exportMode ? .clear : .black.opacity(0.14), radius: 18, x: 0, y: 8)
     }
@@ -104,7 +109,7 @@ struct UnifiedResultCardUI: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: document.layout == .socialPoster ? .center : .leading, spacing: 5) {
             Text(document.title)
                 .font(.system(size: document.layout == .socialPoster ? 30 : 26, weight: .heavy))
                 .foregroundColor(pack.textColor)
@@ -117,7 +122,8 @@ struct UnifiedResultCardUI: View {
                     .lineLimit(2)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: document.layout == .socialPoster ? .center : .leading)
+        .multilineTextAlignment(document.layout == .socialPoster ? .center : .leading)
         .padding(.trailing, 38)
     }
 
@@ -185,12 +191,12 @@ struct UnifiedResultCardUI: View {
 
     private var evidence: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ForEach(document.evidence, id: \.self) { item in
+            ForEach(Array(document.evidence.enumerated()), id: \.offset) { index, item in
                 HStack(alignment: .top, spacing: 7) {
-                    Image(systemName: document.layout == .verdict ? "seal.fill" : "checkmark.circle.fill")
+                    Image(systemName: evidenceIcon)
                         .foregroundColor(pack.accentColor)
                         .font(.system(size: 13))
-                    Text(item)
+                    Text(evidencePrefix(index) + item)
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(pack.textColor)
                         .fixedSize(horizontal: false, vertical: true)
@@ -251,5 +257,53 @@ struct UnifiedResultCardUI: View {
 
     private var panelBackground: Color {
         document.layout == .verdict ? Color.white.opacity(0.82) : Color.white.opacity(0.68)
+    }
+
+    private var borderColor: Color {
+        document.layout == .verdict ? pack.accentColor.opacity(0.72) : pack.accentColor.opacity(0.2)
+    }
+
+    private var evidenceIcon: String {
+        switch document.layout {
+        case .ranking: return "medal.fill"
+        case .verdict: return "seal.fill"
+        case .challenge: return "checklist"
+        default: return "checkmark.circle.fill"
+        }
+    }
+
+    private func evidencePrefix(_ index: Int) -> String {
+        switch document.layout {
+        case .ranking: return "TOP \(index + 1)  "
+        case .challenge: return "任务 \(index + 1)  "
+        default: return ""
+        }
+    }
+
+    private var layoutBadge: some View {
+        HStack {
+            Text(layoutBadgeText)
+                .font(.system(size: 10, weight: .heavy))
+                .foregroundColor(pack.textColor)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 4)
+                .background(pack.accentColor.opacity(0.18))
+                .clipShape(Capsule())
+            Spacer()
+            if document.layout == .verdict {
+                Image(systemName: "seal.fill")
+                    .foregroundColor(pack.accentColor)
+            }
+        }
+    }
+
+    private var layoutBadgeText: String {
+        switch document.layout {
+        case .report: return "PERSONAL REPORT"
+        case .ranking: return "FRIEND RANKING"
+        case .verdict: return "GROUP VERDICT"
+        case .challenge: return "TODAY CHALLENGE"
+        case .socialPoster: return "SOCIAL POSTER"
+        }
     }
 }

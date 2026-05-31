@@ -43,7 +43,7 @@ struct CreatorCenterView: View {
                 loadData()
             }
         }
-        .fullScreenCover(isPresented: $showEditor) {
+        .fullScreenCover(isPresented: $showEditor, onDismiss: loadData) {
             TemplateEditorView()
         }
     }
@@ -186,6 +186,12 @@ struct CreatorCenterView: View {
                     .cornerRadius(22)
             }
             .padding(.top, 10)
+
+            NavigationLink(destination: MyPublishedTemplatesView()) {
+                Text("管理已发布和已隐藏玩法")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.themePrimary)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

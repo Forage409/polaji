@@ -67,6 +67,14 @@ class ImageExportManager {
         // Fallback to asset catalog
         return UIImage(named: path.replacingOccurrences(of: ".png", with: ""))
     }
+
+    func deleteImageFromDocuments(path: String) {
+        guard !path.isEmpty, !path.hasPrefix("/"), !path.hasPrefix("file://"),
+              let documentDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            return
+        }
+        try? FileManager.default.removeItem(at: documentDirectory.appendingPathComponent(path))
+    }
     
     func shareImage(_ image: UIImage, from sourceView: UIView? = nil) {
         let activityVC = UIActivityViewController(activityItems: [image], applicationActivities: nil)

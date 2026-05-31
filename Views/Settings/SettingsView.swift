@@ -42,7 +42,7 @@ struct SettingsView: View {
                 
                 section(title: "云端服务") {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("你的公开作品和点赞记录将自动同步到整活局云端，无需手动干预。")
+                        Text("公开作品会同步到整活局云端；点赞数会提交到云端，已点赞状态仅保存在当前设备。")
                             .font(.system(size: 12))
                             .foregroundColor(.themeTextSecondary)
                             .padding(.horizontal, 16)

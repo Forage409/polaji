@@ -10,20 +10,22 @@ struct EditorBasicInfoView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("玩法名称")
                         .font(.system(size: 14, weight: .bold))
-                    TextField("输入最多 15 个字的名称", text: $draft.title)
+                    TextField("输入最多 15 个字的名称", text: .limited($draft.title, maxLength: TemplateInputLimits.title))
                         .padding()
                         .background(Color.white)
                         .cornerRadius(12)
+                    countLabel(draft.title.count, max: TemplateInputLimits.title)
                 }
                 
                 VStack(alignment: .leading, spacing: 8) {
                     Text("玩法描述")
                         .font(.system(size: 14, weight: .bold))
-                    TextEditor(text: $draft.description)
+                    TextEditor(text: .limited($draft.description, maxLength: TemplateInputLimits.description))
                         .frame(height: 100)
                         .padding(8)
                         .background(Color.white)
                         .cornerRadius(12)
+                    countLabel(draft.description.count, max: TemplateInputLimits.description)
                 }
                 
                 VStack(alignment: .leading, spacing: 8) {
@@ -48,5 +50,12 @@ struct EditorBasicInfoView: View {
             }
             .padding()
         }
+    }
+
+    private func countLabel(_ count: Int, max: Int) -> some View {
+        Text("\(count)/\(max)")
+            .font(.system(size: 11))
+            .foregroundColor(.themeTextSecondary)
+            .frame(maxWidth: .infinity, alignment: .trailing)
     }
 }

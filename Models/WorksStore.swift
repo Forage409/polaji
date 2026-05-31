@@ -16,12 +16,15 @@ class WorksStore: ObservableObject {
     }
     
     func saveWork(_ work: Work) {
+        works.removeAll { $0.id == work.id }
         works.insert(work, at: 0)
         persistWorks()
     }
     
     func deleteWork(id: String) {
+        let paths = works.filter { $0.id == id }.map(\.imagePath)
         works.removeAll { $0.id == id }
+        paths.forEach { ImageExportManager.shared.deleteImageFromDocuments(path: $0) }
         persistWorks()
     }
     

@@ -64,7 +64,7 @@ class CardGenerator {
         let toneInput = inputs["tone"] ?? "默认"
         let multiSelect = (inputs["multiSelect"] ?? "").components(separatedBy: ",").filter { !$0.isEmpty }
         let singleSelect1 = inputs["singleSelect1"] ?? ""
-        _ = inputs["singleSelect2"] ?? ""
+        let singleSelect2 = inputs["singleSelect2"] ?? ""
         let participantsStr = inputs["participants"] ?? ""
         let participants = participantsStr.isEmpty ? [] : participantsStr.components(separatedBy: ",")
         
@@ -105,7 +105,10 @@ class CardGenerator {
             resultLevel = richLevels.randomElement() ?? ""
             finalComment = tonePrefix + (richFinals.randomElement() ?? "")
             stats = [StatItem(name: "财富掩饰", value: Int.random(in: 60...100)), StatItem(name: "真实财力", value: Int.random(in: 60...100)), StatItem(name: "淡定指数", value: Int.random(in: 60...100))]
-            evidenceList = Array(richEvidence.shuffled().prefix(3))
+            evidenceList = [
+                "用户选择的伪装风格：\(singleSelect1.isEmpty ? "低调型" : singleSelect1)",
+                "观察标签：\(multiSelect.isEmpty ? "消费行为稳定" : multiSelect.joined(separator: "、"))"
+            ] + Array(richEvidence.shuffled().prefix(2))
             
         case "single_card":
             templateType = "diagnostic"
@@ -121,7 +124,10 @@ class CardGenerator {
             resultLevel = singleLevels.randomElement() ?? ""
             finalComment = tonePrefix + (singleFinals.randomElement() ?? "")
             stats = [StatItem(name: "心动阈值", value: Int.random(in: 60...100)), StatItem(name: "被动指数", value: Int.random(in: 60...100)), StatItem(name: "桃花潜能", value: Int.random(in: 60...100))]
-            evidenceList = Array(singleEvidence.shuffled().prefix(3))
+            evidenceList = [
+                "当前状态：\(singleSelect1.isEmpty ? "随缘观察" : singleSelect1)",
+                "社交风格：\(singleSelect2.isEmpty ? "慢热型" : singleSelect2)"
+            ] + Array(singleEvidence.shuffled().prefix(2))
             
         case "stay_up":
             templateType = "diagnostic"
@@ -137,7 +143,10 @@ class CardGenerator {
             resultLevel = stayUpLevels.randomElement() ?? ""
             finalComment = tonePrefix + (stayUpFinals.randomElement() ?? "")
             stats = [StatItem(name: "凌晨活跃", value: Int.random(in: 60...100)), StatItem(name: "拖延指数", value: Int.random(in: 60...100)), StatItem(name: "黑眼圈浓度", value: Int.random(in: 60...100))]
-            evidenceList = Array(stayUpEvidence.shuffled().prefix(3))
+            evidenceList = [
+                "当前状态：\(singleSelect1.isEmpty ? "还能撑" : singleSelect1)",
+                "熬夜原因：\(multiSelect.isEmpty ? "睡前舍不得结束今天" : multiSelect.joined(separator: "、"))"
+            ] + Array(stayUpEvidence.shuffled().prefix(2))
             
         case "boss_card":
             templateType = "diagnostic"
@@ -153,7 +162,10 @@ class CardGenerator {
             resultLevel = bossLevels.randomElement() ?? ""
             finalComment = tonePrefix + (bossFinals.randomElement() ?? "")
             stats = [StatItem(name: "控场能力", value: Int.random(in: 60...100)), StatItem(name: "总结欲", value: Int.random(in: 60...100)), StatItem(name: "气场指数", value: Int.random(in: 60...100))]
-            evidenceList = Array(bossEvidence.shuffled().prefix(3))
+            evidenceList = [
+                "出现场景：\(singleSelect1.isEmpty ? "朋友局" : singleSelect1)",
+                "气质标签：\(multiSelect.isEmpty ? "稳定控场" : multiSelect.joined(separator: "、"))"
+            ] + Array(bossEvidence.shuffled().prefix(2))
             
         case "group_judge":
             templateType = "verdict"
@@ -177,7 +189,10 @@ class CardGenerator {
             evidenceList = [judgeCaseSummaries.randomElement() ?? ""]
             evidenceList.append(contentsOf: crimes.map { "主要行为：\($0)" })
 
-            resultLevel = String((judgeShortVerdicts.randomElement() ?? "").prefix(10))
+            let scene = singleSelect1.isEmpty ? "群聊" : singleSelect1
+            let punishment = singleSelect2.isEmpty ? (judgeShortVerdicts.randomElement() ?? "请喝奶茶") : singleSelect2
+            evidenceList.insert("案发场景：\(scene)", at: 0)
+            resultLevel = String(punishment.prefix(10))
             finalComment = tonePrefix + (judgeFinals.randomElement() ?? "")
             
         case "friend_vote":
@@ -221,7 +236,8 @@ class CardGenerator {
 
             evidenceList = [
                 "目标玩家：\(nickname)",
-                "难度标签：\(truthDareLevels.randomElement() ?? "")",
+                "难度标签：\(singleSelect2.isEmpty ? (truthDareLevels.randomElement() ?? "") : singleSelect2)",
+                "关系场景：\(toneInput.isEmpty ? "朋友" : toneInput)",
                 "执行内容：\(task)",
                 "失败惩罚：\(failurePunishments.randomElement() ?? "")"
             ]

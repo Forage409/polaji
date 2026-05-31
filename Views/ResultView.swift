@@ -212,23 +212,27 @@ struct ResultView: View {
         guard let image = getRenderedImage() else { return }
         let card = makeCardForPublishing()
 
+        guard let path = ImageExportManager.shared.saveImageToDocuments(image, fileName: "\(card.id).jpg") else {
+            alertMessage = "保存图片文件失败"
+            showingAlert = true
+            return
+        }
+        WorksStore.shared.saveWork(
+            Work(
+                id: card.id,
+                templateId: template.id,
+                title: card.title,
+                imagePath: path,
+                createdAt: card.createdAt,
+                category: template.category,
+                isShared: false
+            )
+        )
+
         ImageExportManager.shared.saveImageToPhotos(image) { success in
-            if success, let path = ImageExportManager.shared.saveImageToDocuments(image, fileName: "\(card.id).jpg") {
-                WorksStore.shared.saveWork(
-                    Work(
-                        id: card.id,
-                        templateId: template.id,
-                        title: card.title,
-                        imagePath: path,
-                        createdAt: card.createdAt,
-                        category: template.category,
-                        isShared: false
-                    )
-                )
-                alertMessage = "保存成功，已存入相册和我的作品！"
-            } else {
-                alertMessage = success ? "保存图片文件失败" : "保存相册失败，请在设置中允许 App 访问相册。"
-            }
+            alertMessage = success
+                ? "保存成功，已存入相册和我的作品！"
+                : "已存入我的作品。相册保存失败，请在设置中允许 App 访问相册。"
             showingAlert = true
         }
     }

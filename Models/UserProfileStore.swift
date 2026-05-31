@@ -28,24 +28,22 @@ final class UserProfileStore: ObservableObject {
     private init() {
         let defaults = UserDefaults.standard
         self.nickname = defaults.string(forKey: nicknameKey) ?? "整活新人"
-        if let existing = defaults.string(forKey: userIdKey), !existing.isEmpty {
-            self.userId = existing
-        } else {
-            let generated = UserProfileStore.generateUserId()
-            defaults.set(generated, forKey: userIdKey)
-            self.userId = generated
-        }
+        let stableId = UserProfileStore.stableDisplayUserId()
+        defaults.set(stableId, forKey: userIdKey)
+        self.userId = stableId
         self.bio = defaults.string(forKey: bioKey) ?? "和朋友一起整活，好玩又有梗 ✨"
         self.avatarName = defaults.string(forKey: avatarNameKey) ?? "logo"
     }
     
-    private static func generateUserId() -> String {
-        let chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-        let randomChars = (0..<8).map { _ in String(chars.randomElement()!) }.joined()
-        return randomChars
+    private static func stableDisplayUserId() -> String {
+        String(
+            AnonymousIdentityManager.shared.currentUserId
+                .replacingOccurrences(of: "-", with: "")
+                .prefix(8)
+        ).uppercased()
     }
     
     func resetIdForDebug() {
-        userId = UserProfileStore.generateUserId()
+        userId = UserProfileStore.stableDisplayUserId()
     }
 }

@@ -46,6 +46,18 @@ struct PublicWork: Codable, Identifiable {
     let createdAt: String
 }
 
+struct PublishedWorkReceipt: Codable {
+    let id: String
+    let imageUrl: String
+    let createdAt: String
+}
+
+struct WorkLikeReceipt: Codable {
+    let success: Bool
+    let likeCount: Int
+    let alreadyLiked: Bool
+}
+
 struct TemplateStats: Codable {
     let viewCount: Int
     let startCount: Int

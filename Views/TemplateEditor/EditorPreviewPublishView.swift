@@ -49,23 +49,8 @@ struct EditorPreviewPublishView: View {
             showAlert = true
             return
         }
-        if draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            alertMsg = "请填写玩法标题"
-            showAlert = true
-            return
-        }
-        if draft.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            alertMsg = "请填写玩法描述"
-            showAlert = true
-            return
-        }
-        if draft.fields.isEmpty {
-            alertMsg = "请至少添加一个填写项"
-            showAlert = true
-            return
-        }
-        if draft.fields.contains(where: { $0.label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
-            alertMsg = "每个填写项都需要起一个名字"
+        if let error = TemplateDraftValidator.firstError(title: draft.title, description: draft.description, fields: draft.fields) {
+            alertMsg = error
             showAlert = true
             return
         }
@@ -79,8 +64,8 @@ struct EditorPreviewPublishView: View {
             return
         }
 
-        let capturedTitle = self.draft.title
-        let capturedDescription = self.draft.description
+        let capturedTitle = self.draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let capturedDescription = self.draft.description.trimmingCharacters(in: .whitespacesAndNewlines)
         let capturedCategory = self.draft.category
         let formConfigJSON = TemplateFormConfig(
             fields: self.draft.fields,

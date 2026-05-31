@@ -86,7 +86,7 @@ struct MyOrdersView: View {
             Text("还没有订单")
                 .font(.system(size: 18, weight: .heavy))
                 .foregroundColor(.themeTextMain)
-            Text("开通整活局 VIP 即可去除水印、无限生成。")
+            Text("开通整活局 VIP 即可去除水印，并使用官方玩法自定义文案。")
                 .font(.system(size: 13))
                 .foregroundColor(.themeTextSecondary)
                 .multilineTextAlignment(.center)

@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 /// 用户自定义模板字段。`label` 是字段标题，`type` 决定填表时的控件，`options` 给单/多选用。
 struct TemplateField: Codable, Identifiable, Equatable {
@@ -130,5 +131,71 @@ struct TemplateFormConfig: Codable {
             return TemplateFormConfig(fields: fields)
         }
         return .empty
+    }
+}
+
+enum TemplateInputLimits {
+    static let title = 15
+    static let description = 120
+    static let maxFields = 8
+    static let fieldLabel = 12
+    static let placeholder = 30
+    static let option = 16
+    static let minOptions = 2
+    static let maxOptions = 8
+    static let minParticipants = 2
+    static let maxParticipants = 12
+    static let textAnswer = 80
+}
+
+enum TemplateDraftValidator {
+    static func firstError(title: String, description: String, fields: [TemplateField]) -> String? {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedDescription = description.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedTitle.isEmpty { return "请填写玩法标题" }
+        if trimmedTitle.count > TemplateInputLimits.title { return "玩法标题最多 \(TemplateInputLimits.title) 个字" }
+        if trimmedDescription.isEmpty { return "请填写玩法描述" }
+        if trimmedDescription.count > TemplateInputLimits.description { return "玩法描述最多 \(TemplateInputLimits.description) 个字" }
+        if fields.isEmpty { return "请至少添加一个填写项" }
+        if fields.count > TemplateInputLimits.maxFields { return "填写项最多 \(TemplateInputLimits.maxFields) 个" }
+
+        var labels = Set<String>()
+        for field in fields {
+            let label = field.label.trimmingCharacters(in: .whitespacesAndNewlines)
+            if label.isEmpty { return "每个填写项都需要起一个名字" }
+            if label.count > TemplateInputLimits.fieldLabel { return "填写项「\(label)」最多 \(TemplateInputLimits.fieldLabel) 个字" }
+            if !labels.insert(label).inserted { return "填写项名称不能重复：「\(label)」" }
+
+            if field.placeholder.count > TemplateInputLimits.placeholder {
+                return "填写项「\(label)」的提示语最多 \(TemplateInputLimits.placeholder) 个字"
+            }
+
+            if field.type == .singleSelect || field.type == .multiSelect {
+                let options = field.options.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                if options.count < TemplateInputLimits.minOptions { return "「\(label)」至少需要 \(TemplateInputLimits.minOptions) 个选项" }
+                if options.count > TemplateInputLimits.maxOptions { return "「\(label)」最多支持 \(TemplateInputLimits.maxOptions) 个选项" }
+                if options.contains(where: { $0.isEmpty }) { return "「\(label)」存在空选项" }
+                if options.contains(where: { $0.count > TemplateInputLimits.option }) { return "「\(label)」的选项最多 \(TemplateInputLimits.option) 个字" }
+                if Set(options).count != options.count { return "「\(label)」存在重复选项" }
+            }
+
+            if field.type == .participants {
+                let minCount = field.minCount ?? 3
+                let maxCount = field.maxCount ?? 8
+                if minCount < TemplateInputLimits.minParticipants || maxCount > TemplateInputLimits.maxParticipants || minCount > maxCount {
+                    return "「\(label)」人数范围需在 \(TemplateInputLimits.minParticipants)-\(TemplateInputLimits.maxParticipants) 人之间"
+                }
+            }
+        }
+        return nil
+    }
+}
+
+extension Binding where Value == String {
+    static func limited(_ source: Binding<String>, maxLength: Int) -> Binding<String> {
+        Binding(
+            get: { source.wrappedValue },
+            set: { source.wrappedValue = String($0.prefix(maxLength)) }
+        )
     }
 }

@@ -2,7 +2,7 @@ import Foundation
 import Combine
 
 /// 本地持久化"已点赞作品 ID 集合"。每个用户在本机上一个作品只能点一次，
-/// 不依赖后端去重——后端没有点赞表。卸载/换设备会丢失，可接受。
+/// 后端仍会按匿名身份去重；本地集合用于即时反馈和避免重复请求。
 final class LikedWorksStore: ObservableObject {
     static let shared = LikedWorksStore()
 
@@ -30,6 +30,11 @@ final class LikedWorksStore: ObservableObject {
         liked.insert(id)
         persist()
         return true
+    }
+
+    func unmark(_ id: String) {
+        guard liked.remove(id) != nil else { return }
+        persist()
     }
 
     private func persist() {

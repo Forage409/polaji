@@ -157,11 +157,22 @@ struct PublicWorkDetailView: View {
             heartFlyOffset = 0
         }
 
-        // Fire-and-forget server side (server has no auth-bound dedup, so we
-        // ignore failure - the local set already prevents the repeat tap).
         Task {
-            _ = try? await PublicWorksService.shared.likeWork(id: work.id)
-            await MainActor.run { isProcessingLike = false }
+            do {
+                let receipt = try await PublicWorksService.shared.likeWork(id: work.id)
+                await MainActor.run {
+                    likeCount = receipt.likeCount
+                    isProcessingLike = false
+                }
+            } catch {
+                await MainActor.run {
+                    likeStore.unmark(work.id)
+                    likeCount = max(0, likeCount - 1)
+                    alertMessage = "点赞失败，请稍后重试"
+                    showingAlert = true
+                    isProcessingLike = false
+                }
+            }
         }
     }
 

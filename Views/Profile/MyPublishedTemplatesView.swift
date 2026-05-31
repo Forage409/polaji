@@ -9,6 +9,7 @@ struct MyPublishedTemplatesView: View {
     }
     
     @State private var state: ViewState = .loading
+    @State private var actionError = ""
     
     var body: some View {
         Group {
@@ -41,6 +42,14 @@ struct MyPublishedTemplatesView: View {
             if case .loading = state {
                 loadData()
             }
+        }
+        .alert("操作失败", isPresented: Binding(
+            get: { !actionError.isEmpty },
+            set: { if !$0 { actionError = "" } }
+        )) {
+            Button("好的", role: .cancel) {}
+        } message: {
+            Text(actionError)
         }
     }
     
@@ -79,10 +88,34 @@ struct MyPublishedTemplatesView: View {
             }
             VStack(spacing: 16) {
                 ForEach(templates) { template in
-                    NavigationLink(destination: TemplateStatsView(template: template)) {
-                        publishedTemplateCard(template)
+                    HStack(spacing: 0) {
+                        NavigationLink(destination: TemplateStatsView(template: template)) {
+                            publishedTemplateCard(template)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+
+                        Menu {
+                            Button {
+                                updateStatus(template, status: template.status == "published" ? "hidden" : "published")
+                            } label: {
+                                Label(template.status == "published" ? "隐藏玩法" : "重新发布", systemImage: template.status == "published" ? "eye.slash" : "eye")
+                            }
+                            Button(role: .destructive) {
+                                delete(template)
+                            } label: {
+                                Label("删除玩法", systemImage: "trash")
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis.circle")
+                                .font(.system(size: 20))
+                                .foregroundColor(.themeTextSecondary)
+                                .padding(.horizontal, 12)
+                                .frame(maxHeight: .infinity)
+                        }
                     }
-                    .buttonStyle(PlainButtonStyle())
+                    .background(Color.white)
+                    .cornerRadius(16)
+                    .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
                 }
             }
             .padding()
@@ -139,7 +172,7 @@ struct MyPublishedTemplatesView: View {
                     .font(.system(size: 16, weight: .bold))
                     .foregroundColor(.themeTextMain)
 
-                Text("状态: \(template.status == "published" ? "已发布" : "未知")")
+                Text("状态: \(template.status == "published" ? "已发布" : "已隐藏")")
                     .font(.system(size: 12))
                     .foregroundColor(.themePrimary)
 
@@ -156,9 +189,28 @@ struct MyPublishedTemplatesView: View {
                 .foregroundColor(.gray)
         }
         .padding()
-        .background(Color.white)
-        .cornerRadius(16)
-        .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+    }
+
+    private func updateStatus(_ template: RemoteTemplate, status: String) {
+        Task {
+            do {
+                _ = try await RemoteCreatorService.shared.updateTemplateStatus(templateId: template.id, status: status)
+                await MainActor.run { loadData() }
+            } catch {
+                await MainActor.run { actionError = error.localizedDescription }
+            }
+        }
+    }
+
+    private func delete(_ template: RemoteTemplate) {
+        Task {
+            do {
+                _ = try await RemoteCreatorService.shared.deleteTemplate(templateId: template.id)
+                await MainActor.run { loadData() }
+            } catch {
+                await MainActor.run { actionError = error.localizedDescription }
+            }
+        }
     }
 
     @ViewBuilder
@@ -320,4 +372,3 @@ struct TemplateStatsView: View {
         }
     }
 }
-

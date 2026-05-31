@@ -71,6 +71,15 @@ struct GenerateFormView: View {
 
     private func generateAction() {
         if isCustom {
+            if let error = TemplateDraftValidator.firstError(
+                title: template.name,
+                description: template.description.isEmpty ? "已发布玩法" : template.description,
+                fields: template.customFields ?? []
+            ) {
+                alertMessage = "玩法配置有误：\(error)"
+                showAlert = true
+                return
+            }
             for f in template.customFields ?? [] {
                 guard !f.label.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
                 switch f.type {
@@ -102,15 +111,34 @@ struct GenerateFormView: View {
                     }
                 }
             }
-        } else if template.id == "friend_vote" {
-            let validParticipants = participants.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-            if validParticipants.count < 3 {
-                alertMessage = "至少输入 3 个朋友才能开局"
-                showAlert = true
-                return
-            }
+        } else if let error = validateBuiltInInputs() {
+            alertMessage = error
+            showAlert = true
+            return
         }
         navigateToResult = true
+    }
+
+    private func validateBuiltInInputs() -> String? {
+        let trimmedNickname = nickname.trimmingCharacters(in: .whitespacesAndNewlines)
+        switch template.id {
+        case "rich_card", "single_card", "stay_up", "boss_card", "persona_card", "office_survival":
+            if trimmedNickname.isEmpty { return "请填写昵称" }
+        case "group_judge":
+            if defendant.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "请填写被告名字" }
+            if multiSelectData.isEmpty { return "请至少选择一个罪名" }
+        case "friend_vote":
+            if topic.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "请填写投票主题" }
+            let names = participants.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+            if names.count < 3 { return "至少输入 3 个朋友才能开局" }
+            if Set(names).count != names.count { return "参与人名字不能重复" }
+        default:
+            break
+        }
+        if ["rich_card", "stay_up", "boss_card"].contains(template.id), multiSelectData.isEmpty {
+            return "请至少选择一个符合情况的选项"
+        }
+        return nil
     }
 
     private func buildInputs() -> [String: String] {
@@ -188,7 +216,7 @@ struct GenerateFormView: View {
                 inputGroup(title: field.label) {
                     TextField(
                         field.placeholder.isEmpty ? "请输入\(field.label)" : field.placeholder,
-                        text: dynamicTextBinding(for: field.id)
+                        text: dynamicNumberBinding(for: field.id)
                     )
                 }
             case .number:
@@ -235,7 +263,7 @@ struct GenerateFormView: View {
                         set: { newVal in
                             var list = dynamicParticipants[field.id] ?? Array(repeating: "", count: minC)
                             while list.count <= index { list.append("") }
-                            list[index] = newVal
+                            list[index] = String(newVal.prefix(TemplateInputLimits.textAnswer))
                             dynamicParticipants[field.id] = list
                         }
                     ))
@@ -284,7 +312,17 @@ struct GenerateFormView: View {
     private func dynamicTextBinding(for id: String) -> Binding<String> {
         Binding(
             get: { dynamicTextValues[id] ?? "" },
-            set: { dynamicTextValues[id] = $0 }
+            set: { dynamicTextValues[id] = String($0.prefix(TemplateInputLimits.textAnswer)) }
+        )
+    }
+
+    private func dynamicNumberBinding(for id: String) -> Binding<String> {
+        Binding(
+            get: { dynamicTextValues[id] ?? "" },
+            set: {
+                let filtered = $0.filter(\.isNumber)
+                dynamicTextValues[id] = String(filtered.prefix(TemplateInputLimits.textAnswer))
+            }
         )
     }
 
@@ -332,38 +370,38 @@ struct GenerateFormView: View {
     private func renderForm() -> some View {
         switch template.id {
         case "rich_card":
-            inputGroup(title: "TA的昵称") { TextField("请输入昵称", text: $nickname) }
+            inputGroup(title: "TA的昵称") { TextField("请输入昵称", text: .limited($nickname, maxLength: 20)) }
             multiSelectGroup(title: "平时表现 (多选)", options: ["装穷", "点外卖不看价格", "说没钱但装备很新", "花钱很淡定", "经常突然请客"])
             singleSelectGroup(title: "伪装风格", options: ["低调型", "嘴硬型", "暴露型", "神秘型"], selection: $singleSelect1)
             singleSelectGroup(title: "生成语气", options: ["正经鉴定", "群聊整活", "毒舌吐槽", "可爱夸夸"], selection: $tone)
 
         case "single_card":
-            inputGroup(title: "TA的昵称") { TextField("请输入昵称", text: $nickname) }
+            inputGroup(title: "TA的昵称") { TextField("请输入昵称", text: .limited($nickname, maxLength: 20)) }
             singleSelectGroup(title: "当前状态", options: ["单身", "暧昧中", "刚失恋", "佛系随缘", "嘴硬不想谈"], selection: $singleSelect1)
             singleSelectGroup(title: "社交风格", options: ["主动型", "被动型", "社恐型", "海王嫌疑", "纯爱战士"], selection: $singleSelect2)
             singleSelectGroup(title: "生成语气", options: ["甜甜鼓励", "毒舌吐槽", "玄学运势", "朋友调侃"], selection: $tone)
 
         case "stay_up":
-            inputGroup(title: "TA的昵称") { TextField("请输入昵称", text: $nickname) }
+            inputGroup(title: "TA的昵称") { TextField("请输入昵称", text: .limited($nickname, maxLength: 20)) }
             multiSelectGroup(title: "熬夜原因 (多选)", options: ["刷视频", "打游戏", "赶作业", "加班", "想太多", "单纯不困"])
             singleSelectGroup(title: "当前状态", options: ["还能撑", "快不行了", "已经灵魂出窍", "明天一定早睡"], selection: $singleSelect1)
             singleSelectGroup(title: "生成语气", options: ["扎心", "搞笑", "温柔提醒"], selection: $tone)
 
         case "boss_card":
-            inputGroup(title: "TA的昵称") { TextField("请输入昵称", text: $nickname) }
+            inputGroup(title: "TA的昵称") { TextField("请输入昵称", text: .limited($nickname, maxLength: 20)) }
             multiSelectGroup(title: "老板气质 (多选)", options: ["爱画饼", "气场强", "说话像开会", "喜欢总结", "表情严肃"])
             singleSelectGroup(title: "场景", options: ["公司", "班级", "宿舍", "朋友局"], selection: $singleSelect1)
             singleSelectGroup(title: "生成语气", options: ["认真鉴定", "群聊吐槽", "夸张整活"], selection: $tone)
 
         case "group_judge":
-            inputGroup(title: "被告名字") { TextField("请输入被告名字", text: $defendant) }
+            inputGroup(title: "被告名字") { TextField("请输入被告名字", text: .limited($defendant, maxLength: 20)) }
             multiSelectGroup(title: "罪名 (多选)", options: ["已读不回", "迟到", "放鸽子", "装没看见", "只发表情", "关键时刻消失"])
             singleSelectGroup(title: "案发场景", options: ["群聊", "饭局", "班级", "宿舍", "办公室"], selection: $singleSelect1)
             singleSelectGroup(title: "惩罚方式", options: ["请奶茶", "发红包", "公开道歉", "下次请客", "当气氛组"], selection: $singleSelect2)
             singleSelectGroup(title: "判决语气", options: ["正经判决", "离谱判决", "毒舌判决"], selection: $tone)
 
         case "friend_vote":
-            inputGroup(title: "投票主题") { TextField("例如：谁最可能先脱单", text: $topic) }
+            inputGroup(title: "投票主题") { TextField("例如：谁最可能先脱单", text: .limited($topic, maxLength: 30)) }
             participantsGroup()
             singleSelectGroup(title: "榜单风格", options: ["正经榜", "离谱榜", "群聊整活榜", "友情伤害榜"], selection: $tone)
 
@@ -371,17 +409,17 @@ struct GenerateFormView: View {
             singleSelectGroup(title: "模式", options: ["真心话", "大冒险", "随机"], selection: $singleSelect1)
             singleSelectGroup(title: "难度", options: ["轻松", "中等", "社死"], selection: $singleSelect2)
             singleSelectGroup(title: "关系", options: ["朋友", "同学", "情侣", "同事"], selection: $tone)
-            inputGroup(title: "昵称 (可选)") { TextField("如果不填则直接出题", text: $nickname) }
+            inputGroup(title: "昵称 (可选)") { TextField("如果不填则直接出题", text: .limited($nickname, maxLength: 20)) }
 
         default:
-            inputGroup(title: "TA的昵称") { TextField("请输入昵称", text: $nickname) }
+            inputGroup(title: "TA的昵称") { TextField("请输入昵称", text: .limited($nickname, maxLength: 20)) }
             singleSelectGroup(title: "生成语气", options: ["可爱夸夸", "毒舌吐槽", "正经鉴定"], selection: $tone)
         }
 
         // Custom Quote Section (VIP-only, only on built-in templates)
         if VipManager.shared.isVip {
             inputGroup(title: "自定义文案 (VIP专属)") {
-                TextField("选填，将替换默认生成的文案", text: $customQuote)
+                TextField("选填，将替换默认生成的文案", text: .limited($customQuote, maxLength: 72))
             }
         } else {
             VStack(alignment: .leading, spacing: 8) {
@@ -504,7 +542,7 @@ struct GenerateFormView: View {
 
             ForEach(0..<participants.count, id: \.self) { index in
                 HStack {
-                    TextField("名字", text: $participants[index])
+                    TextField("名字", text: .limited($participants[index], maxLength: 20))
                         .padding()
                         .background(Color.white)
                         .cornerRadius(12)

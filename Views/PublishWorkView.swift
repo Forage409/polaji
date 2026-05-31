@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct PublishWorkView: View {
+    private let titleLimit = 36
+    private let descriptionLimit = 160
     let template: Template
     let card: GeneratedCard
     let image: UIImage
@@ -35,20 +37,28 @@ struct PublishWorkView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("作品标题")
                             .font(.system(size: 14, weight: .bold))
-                        TextField("给你的神作起个响亮的名字", text: $title)
+                        TextField("给你的神作起个响亮的名字", text: .limited($title, maxLength: titleLimit))
                             .padding()
                             .background(Color.white)
                             .cornerRadius(12)
+                        Text("\(title.count)/\(titleLimit)")
+                            .font(.system(size: 11))
+                            .foregroundColor(.themeTextSecondary)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
                     }
                     
                     VStack(alignment: .leading, spacing: 8) {
                         Text("作品描述 (可选)")
                             .font(.system(size: 14, weight: .bold))
-                        TextEditor(text: $description)
+                        TextEditor(text: .limited($description, maxLength: descriptionLimit))
                             .frame(height: 100)
                             .padding(8)
                             .background(Color.white)
                             .cornerRadius(12)
+                        Text("\(description.count)/\(descriptionLimit)")
+                            .font(.system(size: 11))
+                            .foregroundColor(.themeTextSecondary)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
                     }
                     
                     Toggle("匿名发布", isOn: $isAnonymous)
@@ -79,7 +89,7 @@ struct PublishWorkView: View {
                                 .foregroundColor(.themePrimary)
                         }
                     }
-                    .disabled(isPublishing || title.isEmpty)
+                    .disabled(isPublishing || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
             .toast(isPresented: $showAlert, message: alertMsg)
@@ -87,6 +97,13 @@ struct PublishWorkView: View {
     }
     
     private func publish() {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedDescription = description.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTitle.isEmpty else {
+            alertMsg = "请填写作品标题"
+            showAlert = true
+            return
+        }
         isPublishing = true
 
         guard let imageData = image.jpegData(compressionQuality: 0.8) else {
@@ -98,9 +115,9 @@ struct PublishWorkView: View {
 
         Task {
             do {
-                let success = try await PublicWorksService.shared.publishWork(
-                    title: title,
-                    description: description,
+                let receipt = try await PublicWorksService.shared.publishWork(
+                    title: String(trimmedTitle.prefix(titleLimit)),
+                    description: String(trimmedDescription.prefix(descriptionLimit)),
                     isAnonymous: isAnonymous,
                     tags: template.tags,
                     templateId: template.id,
@@ -110,14 +127,26 @@ struct PublishWorkView: View {
 
                 await MainActor.run {
                     isPublishing = false
-                    if success {
+                    if let path = ImageExportManager.shared.saveImageToDocuments(image, fileName: "\(receipt.id).jpg") {
+                        WorksStore.shared.saveWork(
+                            Work(
+                                id: receipt.id,
+                                templateId: template.id,
+                                title: String(trimmedTitle.prefix(titleLimit)),
+                                imagePath: path,
+                                createdAt: receipt.createdAt,
+                                category: template.category,
+                                isShared: true
+                            )
+                        )
+                        NotificationCenter.default.post(name: NSNotification.Name("RefreshWorksFeed"), object: nil)
                         alertMsg = "发布成功！"
                         showAlert = true
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                             presentationMode.wrappedValue.dismiss()
                         }
                     } else {
-                        alertMsg = "发布失败，请重试"
+                        alertMsg = "已发布到广场，但保存到本地作品失败"
                         showAlert = true
                     }
                 }

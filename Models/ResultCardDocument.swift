@@ -226,38 +226,63 @@ struct ResultCardDocument: Identifiable {
         let fields = (template.customFields ?? []).map {
             ResultFieldValue(label: $0.label, value: inputs[$0.label] ?? "")
         }
-        return make(
+        return makeCustom(
             id: UUID().uuidString,
             templateId: template.id,
             title: template.name,
             subtitle: "by \(UserProfileStore.shared.nickname)",
             fields: fields,
-            stats: [],
-            evidence: [],
-            resultLevel: "",
-            quote: "",
-            finalComment: "",
             createdAt: ISO8601DateFormatter().string(from: Date()),
-            config: template.resultConfig
+            config: template.resultConfig,
+            preview: false
         )
     }
 
     static func preview(config: TemplateResultConfig, title: String, fields: [TemplateField]) -> ResultCardDocument {
-        let previewFields = fields.prefix(3).map {
+        let previewFields = fields.map {
             ResultFieldValue(label: $0.label.isEmpty ? "未命名" : $0.label, value: sampleValue(for: $0))
         }
-        return make(
+        return makeCustom(
             id: "preview",
             templateId: "preview",
             title: title.isEmpty ? "玩法标题" : title,
             subtitle: "潮流贴纸结果卡",
             fields: previewFields.isEmpty ? [ResultFieldValue(label: "昵称", value: "小幽灵")] : previewFields,
-            stats: [StatItem(name: "整活指数", value: 88), StatItem(name: "气氛值", value: 96)],
-            evidence: ["朋友局认证通过", "截图分享效果拉满"],
-            resultLevel: "今日主角",
-            quote: "有点东西，但不完全承认",
-            finalComment: "生成结果仅供娱乐，开心最重要",
             createdAt: "预览",
+            config: config,
+            preview: true
+        )
+    }
+
+    private static func makeCustom(
+        id: String,
+        templateId: String,
+        title: String,
+        subtitle: String,
+        fields: [ResultFieldValue],
+        createdAt: String,
+        config: TemplateResultConfig,
+        preview: Bool
+    ) -> ResultCardDocument {
+        let evidence = Array(fields.prefix(3).map {
+            "\($0.label)：\($0.value.isEmpty ? "待填写" : $0.value)"
+        })
+        let score = preview ? 88 : Int.random(in: 72...98)
+        return make(
+            id: id,
+            templateId: templateId,
+            title: title,
+            subtitle: subtitle,
+            fields: fields,
+            stats: [
+                StatItem(name: "整活指数", value: score),
+                StatItem(name: "氛围适配", value: preview ? 96 : Int.random(in: 70...99))
+            ],
+            evidence: evidence,
+            resultLevel: preview ? "今日主角" : ["气氛担当", "朋友局主角", "整活认证", "状态拉满"].randomElement() ?? "整活认证",
+            quote: preview ? "有点东西，但不完全承认" : ["这波确实有点东西", "群友看完很难不点头", "截图已经替你保留证据", "节目效果已经给到了"].randomElement() ?? "这波确实有点东西",
+            finalComment: "结果仅供朋友间娱乐，开心最重要。",
+            createdAt: createdAt,
             config: config
         )
     }

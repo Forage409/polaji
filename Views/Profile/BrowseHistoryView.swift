@@ -11,18 +11,7 @@ struct BrowseHistoryView: View {
             } else {
                 List {
                     ForEach(store.entries) { entry in
-                        let minimalTemplate = Template(
-                            id: entry.templateId,
-                            name: entry.templateName,
-                            category: entry.category,
-                            description: "",
-                            coverImage: entry.coverImage,
-                            isVip: false,
-                            usageCount: 0,
-                            tags: [],
-                            fields: []
-                        )
-                        NavigationLink(destination: TemplateDetailView(template: minimalTemplate)) {
+                        NavigationLink(destination: BrowseHistoryTemplateDestination(entry: entry)) {
                             row(entry: entry)
                         }
                         .listRowBackground(Color.themeBackground)
@@ -64,9 +53,7 @@ struct BrowseHistoryView: View {
                 RoundedRectangle(cornerRadius: 10)
                     .fill(Color.gray.opacity(0.1))
                     .frame(width: 64, height: 64)
-                Image.bundle(entry.coverImage)
-                    .resizable()
-                    .scaledToFill()
+                historyCover(entry.coverImage)
                     .frame(width: 64, height: 64)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
             }
@@ -89,6 +76,19 @@ struct BrowseHistoryView: View {
             Spacer()
         }
         .padding(.vertical, 4)
+    }
+
+    @ViewBuilder
+    private func historyCover(_ raw: String) -> some View {
+        if raw.hasPrefix("http://") || raw.hasPrefix("https://") {
+            CachedAsyncImage(url: URL(string: raw)) { image in
+                image.resizable().scaledToFill()
+            } placeholder: {
+                Color.gray.opacity(0.12)
+            }
+        } else {
+            Image.bundle(raw).resizable().scaledToFill()
+        }
     }
     
     private var emptyState: some View {
@@ -126,5 +126,44 @@ struct BrowseHistoryView: View {
         let f = DateFormatter()
         f.dateFormat = "MM-dd HH:mm"
         return f.string(from: date)
+    }
+}
+
+private struct BrowseHistoryTemplateDestination: View {
+    let entry: BrowseHistoryEntry
+    @State private var template: Template?
+    @State private var errorMessage = ""
+
+    var body: some View {
+        Group {
+            if let template {
+                TemplateDetailView(template: template)
+            } else if !errorMessage.isEmpty {
+                VStack(spacing: 14) {
+                    Text(errorMessage)
+                        .foregroundColor(.themeTextSecondary)
+                    Button("重新加载", action: load)
+                        .foregroundColor(.themePrimary)
+                }
+            } else {
+                ProgressView("正在恢复玩法...")
+            }
+        }
+        .onAppear(perform: load)
+    }
+
+    private func load() {
+        if let builtIn = MockData.template(id: entry.templateId) {
+            template = builtIn
+            return
+        }
+        Task {
+            do {
+                let remote = try await RemoteTemplateService.shared.fetchTemplateDetail(id: entry.templateId)
+                await MainActor.run { template = Template(from: remote) }
+            } catch {
+                await MainActor.run { errorMessage = "玩法已下架或加载失败" }
+            }
+        }
     }
 }

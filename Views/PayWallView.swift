@@ -26,11 +26,7 @@ struct PayWallView: View {
     
     private let benefits: [(String, String, String)] = [
         ("nosign", "去除水印", "保存导出的整活卡片不再带「整活局」水印"),
-        ("infinity", "无限生成", "全部模板不限次数，想整就整"),
-        ("crown", "解锁全部模板", "包含 VIP 限定模板与节日模板"),
-        ("hd", "高清导出", "导出图片清晰度更高，朋友圈不糊"),
-        ("paint", "节日 / 限定模板", "每逢节日上新限定模板，会员先用"),
-        ("edit", "自定义文案", "可编辑生成结果的关键文字")
+        ("edit", "官方玩法自定义文案", "在官方玩法生成前补充一段专属文案")
     ]
     
     var body: some View {
@@ -82,7 +78,7 @@ struct PayWallView: View {
                     .font(.system(size: 26, weight: .heavy))
                     .foregroundColor(.themeTextMain)
             }
-            Text(vip.isVip ? "你已是 VIP — \(vip.expiryDisplay)" : "解锁全部模板，享受更多创作特权")
+            Text(vip.isVip ? "你已是 VIP — \(vip.expiryDisplay)" : "去除水印，体验官方玩法自定义文案")
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(.themeTextSecondary)
         }

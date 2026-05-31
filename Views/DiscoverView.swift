@@ -183,6 +183,9 @@ struct TemplateWaterfallCard: View {
 struct WorksFeedWaterfallView: View {
     @State private var works: [PublicWork] = []
     @State private var isLoading = true
+    @State private var isLoadingMore = false
+    @State private var hasMore = true
+    @State private var errorMessage = ""
     
     let columns = [
         GridItem(.flexible(), spacing: 12),
@@ -194,6 +197,19 @@ struct WorksFeedWaterfallView: View {
             if isLoading {
                 ProgressView("加载中...")
                     .padding(.top, 50)
+            } else if works.isEmpty, !errorMessage.isEmpty {
+                VStack(spacing: 12) {
+                    Image(systemName: "wifi.exclamationmark")
+                        .font(.system(size: 40))
+                        .foregroundColor(.gray)
+                    Text(errorMessage)
+                        .font(.system(size: 13))
+                        .foregroundColor(.themeTextSecondary)
+                    Button("重新加载") { loadWorks(reset: true) }
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(.themePrimary)
+                }
+                .padding(.top, 80)
             } else if works.isEmpty {
                 VStack(spacing: 12) {
                     Image(systemName: "photo.on.rectangle.angled")
@@ -213,21 +229,64 @@ struct WorksFeedWaterfallView: View {
                     }
                 }
                 .padding(.horizontal, 16)
-                .padding(.bottom, 120)
+                if hasMore {
+                    Button(action: { loadWorks(reset: false) }) {
+                        if isLoadingMore {
+                            ProgressView()
+                        } else {
+                            Text("加载更多")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(.themePrimary)
+                        }
+                    }
+                    .disabled(isLoadingMore)
+                    .padding(.vertical, 20)
+                }
+                if !errorMessage.isEmpty {
+                    Text(errorMessage)
+                        .font(.system(size: 12))
+                        .foregroundColor(.themeTextSecondary)
+                        .padding(.bottom, 20)
+                }
+                Spacer(minLength: 100)
             }
         }
         .onAppear {
-            Task {
-                do {
-                    let fetched = try await PublicWorksService.shared.fetchWorksFeed()
-                    await MainActor.run {
-                        self.isLoading = false
-                        self.works = fetched
+            loadWorks(reset: true)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshWorksFeed"))) { _ in
+            loadWorks(reset: true)
+        }
+    }
+
+    private func loadWorks(reset: Bool) {
+        if reset {
+            isLoading = true
+            errorMessage = ""
+        } else {
+            guard !isLoadingMore, hasMore else { return }
+            isLoadingMore = true
+        }
+        Task {
+            do {
+                let offset = reset ? 0 : works.count
+                let fetched = try await PublicWorksService.shared.fetchWorksFeed(offset: offset)
+                await MainActor.run {
+                    self.isLoading = false
+                    self.isLoadingMore = false
+                    self.errorMessage = ""
+                    self.hasMore = fetched.count == 20
+                    self.works = reset ? fetched : works + fetched.filter { newWork in
+                        !works.contains { $0.id == newWork.id }
                     }
-                } catch {
-                    await MainActor.run { self.isLoading = false }
-                    print("Failed to load works feed: \(error)")
                 }
+            } catch {
+                await MainActor.run {
+                    self.isLoading = false
+                    self.isLoadingMore = false
+                    self.errorMessage = "加载失败，请检查网络后重试"
+                }
+                print("Failed to load works feed: \(error)")
             }
         }
     }

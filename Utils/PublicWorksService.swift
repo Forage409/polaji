@@ -5,8 +5,8 @@ class PublicWorksService {
     
     private init() {}
     
-    func fetchWorksFeed() async throws -> [PublicWork] {
-        let request = try APIClient.shared.createRequest(path: "/api/works/feed")
+    func fetchWorksFeed(offset: Int = 0, limit: Int = 20) async throws -> [PublicWork] {
+        let request = try APIClient.shared.createRequest(path: "/api/works/feed?offset=\(offset)&limit=\(limit)")
         return try await APIClient.shared.performRequest(request: request)
     }
     
@@ -14,8 +14,13 @@ class PublicWorksService {
         let request = try APIClient.shared.createRequest(path: "/api/works/\(id)")
         return try await APIClient.shared.performRequest(request: request)
     }
+
+    func fetchMyPublishedWorks() async throws -> [PublicWork] {
+        let request = try APIClient.shared.createRequest(path: "/api/creator/works")
+        return try await APIClient.shared.performRequest(request: request)
+    }
     
-    func publishWork(title: String, description: String, isAnonymous: Bool, tags: [String], templateId: String, category: String, imageData: Data) async throws -> Bool {
+    func publishWork(title: String, description: String, isAnonymous: Bool, tags: [String], templateId: String, category: String, imageData: Data) async throws -> PublishedWorkReceipt {
         // Upload image first
         let imageUrl = try await APIClient.shared.upload(path: "/api/upload", data: imageData, contentType: "image/jpeg")
         
@@ -35,7 +40,7 @@ class PublicWorksService {
         
         let body = try? JSONSerialization.data(withJSONObject: payload)
         let request = try APIClient.shared.createRequest(path: "/api/works", method: "POST", body: body)
-        return try await APIClient.shared.performActionRequest(request: request)
+        return try await APIClient.shared.performRequest(request: request)
     }
     
     func deleteWork(id: String) async throws -> Bool {
@@ -43,9 +48,9 @@ class PublicWorksService {
         return try await APIClient.shared.performActionRequest(request: request)
     }
     
-    func likeWork(id: String) async throws -> Bool {
+    func likeWork(id: String) async throws -> WorkLikeReceipt {
         let request = try APIClient.shared.createRequest(path: "/api/works/\(id)/like", method: "POST")
-        return try await APIClient.shared.performActionRequest(request: request)
+        return try await APIClient.shared.performRequest(request: request)
     }
     
     func reportWork(id: String) async throws -> Bool {
@@ -53,4 +58,3 @@ class PublicWorksService {
         return try await APIClient.shared.performActionRequest(request: request)
     }
 }
-

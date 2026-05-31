@@ -53,8 +53,12 @@ class AnonymousIdentityManager {
             print("Failed to register device: \(error)")
             // Retry after a delay
             try? await Task.sleep(nanoseconds: 2_000_000_000)
-            try? await registerDevice(userId: userId, token: token)
-            self.isRegistered = true
+            do {
+                try await registerDevice(userId: userId, token: token)
+                self.isRegistered = true
+            } catch {
+                print("Device registration retry failed: \(error)")
+            }
         }
     }
     
@@ -62,7 +66,9 @@ class AnonymousIdentityManager {
         // We will call APIClient here, but we can't directly use APIClient's injected headers for this specific request.
         // So we do a raw request to register.
         let baseURL = Bundle.main.object(forInfoDictionaryKey: "API_BASE_URL") as? String ?? "https://zhenghuo.miaogou.site"
-        guard let url = URL(string: "\(baseURL)/api/auth/device") else { return }
+        guard let url = URL(string: "\(baseURL)/api/auth/device") else {
+            throw URLError(.badURL)
+        }
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -70,7 +76,11 @@ class AnonymousIdentityManager {
         let payload = ["anonymousUserId": userId, "installToken": token]
         request.httpBody = try? JSONSerialization.data(withJSONObject: payload)
         
-        let _ = try? await URLSession.shared.data(for: request)
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200..<300).contains(httpResponse.statusCode) else {
+            throw URLError(.badServerResponse)
+        }
     }
     
     private func saveToKeychain(account: String, value: String) {
@@ -105,4 +115,3 @@ class AnonymousIdentityManager {
         return nil
     }
 }
-

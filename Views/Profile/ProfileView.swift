@@ -166,7 +166,7 @@ struct ProfileView: View {
                     Text(vip.isVip ? "你已是整活局 VIP" : "整活局 VIP")
                         .font(.system(size: 17, weight: .heavy))
                         .foregroundColor(.themeTextMain)
-                    Text(vip.isVip ? vip.expiryDisplay : "解锁全部模板，去除水印")
+                    Text(vip.isVip ? vip.expiryDisplay : "去除水印，体验官方玩法自定义文案")
                         .font(.system(size: 12))
                         .foregroundColor(.themeTextMain.opacity(0.75))
                         .lineLimit(2)
@@ -199,6 +199,10 @@ struct ProfileView: View {
         VStack(spacing: 0) {
             menuRow(icon: "sparkles.rectangle.stack.fill", color: Color.themePrimary, title: "创作者中心", subtitle: "管理我的玩法，查看数据漏斗") {
                 CreatorCenterView()
+            }
+            divider()
+            menuRow(icon: "globe.asia.australia.fill", color: Color(hex: "4CAF7D"), title: "我的公开作品", subtitle: "查看或撤回发布到广场的作品") {
+                MyPublishedWorksView()
             }
             divider()
             menuRow(icon: "doc.text.fill", color: Color(hex: "FFB300"), title: "我的订单", subtitle: "查看会员订单与支付记录") {

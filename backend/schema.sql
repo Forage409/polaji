@@ -45,3 +45,10 @@ CREATE TABLE IF NOT EXISTS users (
     install_token_hash TEXT NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS work_likes (
+    work_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (work_id, user_id)
+);

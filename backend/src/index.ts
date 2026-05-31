@@ -16,6 +16,68 @@ function n(value: any, fallback: number = 0): number {
     return isNaN(num) ? fallback : num;
 }
 
+function cleanText(value: any): string {
+    return s(value).trim();
+}
+
+function isTextWithin(value: any, maxLength: number, allowEmpty: boolean = false): boolean {
+    const text = cleanText(value);
+    return (allowEmpty || text.length > 0) && text.length <= maxLength;
+}
+
+function isAllowedTemplateStatus(value: any): boolean {
+    return ['draft', 'published', 'hidden'].includes(s(value));
+}
+
+function serializeConfig(rawValue: any, fallbackValue: any): string {
+    return s(typeof rawValue === 'string' ? rawValue : JSON.stringify(fallbackValue ?? {}));
+}
+
+function isValidTemplateFormConfig(raw: string): boolean {
+    if (!raw || raw.length > 20000) return false;
+    try {
+        const parsed = JSON.parse(raw);
+        const fields = parsed?.fields;
+        if (!Array.isArray(fields) || fields.length < 1 || fields.length > 8) return false;
+
+        const labels = new Set<string>();
+        for (const field of fields) {
+            const label = cleanText(field?.label);
+            const type = s(field?.type);
+            if (!label || label.length > 12 || labels.has(label)) return false;
+            labels.add(label);
+            if (!['text', 'number', 'singleSelect', 'multiSelect', 'participants'].includes(type)) return false;
+            if (s(field?.placeholder).length > 30) return false;
+
+            if (type === 'singleSelect' || type === 'multiSelect') {
+                if (!Array.isArray(field?.options) || field.options.length < 2 || field.options.length > 8) return false;
+                const options = field.options.map((option: any) => cleanText(option));
+                if (options.some((option: string) => !option || option.length > 16)) return false;
+                if (new Set(options).size !== options.length) return false;
+            }
+
+            if (type === 'participants') {
+                const minCount = n(field?.minCount, 3);
+                const maxCount = n(field?.maxCount, 8);
+                if (minCount < 2 || maxCount > 12 || minCount > maxCount) return false;
+            }
+        }
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+function isValidResultConfig(raw: string): boolean {
+    if (!raw || raw.length > 20000) return false;
+    try {
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed);
+    } catch {
+        return false;
+    }
+}
+
 // Map a templates row (joined with template_stats) to the frontend RemoteTemplate shape.
 // Frontend uses camelCase and requires stats fields even when none exist yet.
 function mapTemplate(row: any, origin: string = ''): any {
@@ -43,7 +105,7 @@ function mapTemplate(row: any, origin: string = ''): any {
     };
 }
 
-function mapWork(row: any, origin: string = ''): any {
+function mapWork(row: any, origin: string = '', revealAuthor: boolean = false): any {
     if (!row) return null;
     let tags: string[] = [];
     if (row.tags) {
@@ -52,16 +114,17 @@ function mapWork(row: any, origin: string = ''): any {
             if (Array.isArray(parsed)) tags = parsed.map((t: any) => String(t));
         } catch { /* ignore */ }
     }
+    const isAnonymous = row.is_anonymous === 1 || row.is_anonymous === true;
     return {
         id: s(row.id),
         title: s(row.title),
         description: s(row.description),
         imageUrl: rewriteImageUrl(s(row.image_url), origin),
-        authorId: s(row.author_id),
-        authorName: s(row.author_name),
+        authorId: isAnonymous && !revealAuthor ? '' : s(row.author_id),
+        authorName: isAnonymous && !revealAuthor ? '匿名用户' : s(row.author_name),
         templateId: s(row.template_id),
         category: s(row.category),
-        isAnonymous: row.is_anonymous === 1 || row.is_anonymous === true,
+        isAnonymous,
         tags,
         likeCount: n(row.like_count),
         reportCount: n(row.report_count),
@@ -83,12 +146,33 @@ function rewriteImageUrl(raw: string, origin: string): string {
     return raw;
 }
 
+function imageKeyFromUrl(raw: string): string | null {
+    const proxyMarker = "/api/images/";
+    const markerIndex = raw.indexOf(proxyMarker);
+    if (markerIndex >= 0) return decodeURIComponent(raw.slice(markerIndex + proxyMarker.length));
+
+    const legacyPrefix = "https://r2.zhenghuoju.com/";
+    if (raw.startsWith(legacyPrefix)) return decodeURIComponent(raw.slice(legacyPrefix.length));
+    return null;
+}
+
 async function hashToken(token: string): Promise<string> {
     const encoder = new TextEncoder();
     const data = encoder.encode(token);
     const hashBuffer = await crypto.subtle.digest('SHA-256', data);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function ensureWorkLikesTable(env: Env): Promise<void> {
+    await env.DB.prepare(`
+        CREATE TABLE IF NOT EXISTS work_likes (
+            work_id TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (work_id, user_id)
+        )
+    `).run();
 }
 
 async function verifyAuth(request: Request, env: Env): Promise<string | null> {
@@ -138,7 +222,7 @@ export default {
             // 1. Auth Device
             if (path === "/api/auth/device" && method === "POST") {
                 const body: any = await request.json();
-                if (!body.anonymousUserId || !body.installToken) {
+                if (!isTextWithin(body.anonymousUserId, 128) || !isTextWithin(body.installToken, 128)) {
                     return Response.json({ error: "Missing fields" }, { status: 400, headers: corsHeaders });
                 }
                 const tokenHash = await hashToken(body.installToken);
@@ -174,7 +258,9 @@ export default {
 
             // 3. Works Feed
             if (path === "/api/works/feed" && method === "GET") {
-                const { results } = await env.DB.prepare("SELECT * FROM works ORDER BY created_at DESC LIMIT 20").all();
+                const offset = Math.max(0, Math.min(10000, n(url.searchParams.get("offset"))));
+                const limit = Math.max(1, Math.min(50, n(url.searchParams.get("limit"), 20)));
+                const { results } = await env.DB.prepare("SELECT * FROM works ORDER BY created_at DESC LIMIT ? OFFSET ?").bind(limit, offset).all();
                 return Response.json((results || []).map((r: any) => mapWork(r, url.origin)), { headers: corsHeaders });
             }
 
@@ -184,7 +270,7 @@ export default {
                 const template = await env.DB.prepare(`
                     SELECT t.*, ts.view_count, ts.start_count, ts.generate_count, ts.usage_count, ts.share_count, ts.like_count, ts.report_count
                     FROM templates t LEFT JOIN template_stats ts ON ts.template_id = t.id
-                    WHERE t.id = ?
+                    WHERE t.id = ? AND t.status = 'published'
                 `).bind(s(templateDetailMatch[1])).first();
                 if (!template) return Response.json({ error: "Not found" }, { status: 404, headers: corsHeaders });
                 return Response.json(mapTemplate(template, url.origin), { headers: corsHeaders });
@@ -254,6 +340,11 @@ export default {
                 return Response.json((results || []).map((r: any) => mapTemplate(r, url.origin)), { headers: corsHeaders });
             }
 
+            if (path === "/api/creator/works" && method === "GET") {
+                const { results } = await env.DB.prepare("SELECT * FROM works WHERE author_id = ? ORDER BY created_at DESC LIMIT 100").bind(safeUserId).all();
+                return Response.json((results || []).map((r: any) => mapWork(r, url.origin, true)), { headers: corsHeaders });
+            }
+
             // Creator Actions on Specific Templates
             const creatorActionMatch = path.match(/^\/api\/creator\/templates\/([^\/]+)(?:\/(hide|status|stats))?$/);
             if (creatorActionMatch) {
@@ -279,7 +370,10 @@ export default {
                 }
                 if (method === "PUT" && action === "status") {
                     const body: any = await request.json();
-                    await env.DB.prepare("UPDATE templates SET status = ? WHERE id = ?").bind(s(body.status, 'draft'), id).run();
+                    if (!isAllowedTemplateStatus(body.status)) {
+                        return Response.json({ error: "Invalid status" }, { status: 400, headers: corsHeaders });
+                    }
+                    await env.DB.prepare("UPDATE templates SET status = ? WHERE id = ?").bind(s(body.status), id).run();
                     return Response.json({ success: true }, { headers: corsHeaders });
                 }
                 if (method === "GET" && action === "stats") {
@@ -301,11 +395,17 @@ export default {
                 try {
                     const body: any = await request.json();
                     console.log("Creating template - raw body:", JSON.stringify(body));
+                    const formConfigRaw = serializeConfig(body.formConfigRaw, body.formConfig);
+                    const resultConfigRaw = serializeConfig(body.resultConfigRaw, body.resultConfig);
 
-                    if (!body.id || !body.title) {
+                    if (!isTextWithin(body.id, 128) ||
+                        !isTextWithin(body.title, 15) ||
+                        !isTextWithin(body.description, 120) ||
+                        !isValidTemplateFormConfig(formConfigRaw) ||
+                        !isValidResultConfig(resultConfigRaw)) {
                         return Response.json({
-                            error: "Missing required fields",
-                            details: "id and title are required",
+                            error: "Invalid required fields",
+                            details: "id, title, description, form config, or result config is invalid",
                             received: { id: body.id, title: body.title }
                         }, { status: 400, headers: corsHeaders });
                     }
@@ -315,15 +415,15 @@ export default {
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     `).bind(
                         s(body.id),
-                        s(body.title),
-                        s(body.description),
+                        cleanText(body.title),
+                        cleanText(body.description),
                         s(body.coverImage),
                         s(body.category),
                         safeUserId,
                         s(body.authorName),
-                        s(body.status, 'draft'),
-                        s(typeof body.formConfigRaw === 'string' ? body.formConfigRaw : JSON.stringify(body.formConfig ?? {})),
-                        s(typeof body.resultConfigRaw === 'string' ? body.resultConfigRaw : JSON.stringify(body.resultConfig ?? {}))
+                        isAllowedTemplateStatus(body.status) ? s(body.status) : 'draft',
+                        formConfigRaw,
+                        resultConfigRaw
                     ).run();
                     return Response.json({ success: true }, { headers: corsHeaders });
                 } catch (err: any) {
@@ -341,16 +441,24 @@ export default {
                 try {
                     const id = s(templateDetailMatch[1]);
                     const body: any = await request.json();
+                    const formConfigRaw = serializeConfig(body.formConfigRaw, body.formConfig);
+                    const resultConfigRaw = serializeConfig(body.resultConfigRaw, body.resultConfig);
+                    if (!isTextWithin(body.title, 15) ||
+                        !isTextWithin(body.description, 120) ||
+                        !isValidTemplateFormConfig(formConfigRaw) ||
+                        !isValidResultConfig(resultConfigRaw)) {
+                        return Response.json({ error: "Invalid template fields" }, { status: 400, headers: corsHeaders });
+                    }
                     await env.DB.prepare(`
                         UPDATE templates SET title = ?, description = ?, cover_image = ?, category = ?, form_config_raw = ?, result_config_raw = ?
                         WHERE id = ? AND author_id = ?
                     `).bind(
-                        s(body.title),
-                        s(body.description),
+                        cleanText(body.title),
+                        cleanText(body.description),
                         s(body.coverImage),
                         s(body.category),
-                        s(typeof body.formConfigRaw === 'string' ? body.formConfigRaw : JSON.stringify(body.formConfig ?? {})),
-                        s(typeof body.resultConfigRaw === 'string' ? body.resultConfigRaw : JSON.stringify(body.resultConfig ?? {})),
+                        formConfigRaw,
+                        resultConfigRaw,
                         id,
                         safeUserId
                     ).run();
@@ -381,10 +489,14 @@ export default {
                     console.log("Publishing work - userId from auth:", safeUserId);
 
                     // Validate required fields
-                    if (!body.id || !body.templateId || !body.title || !body.imageUrl) {
+                    if (!isTextWithin(body.id, 128) ||
+                        !isTextWithin(body.templateId, 128) ||
+                        !isTextWithin(body.title, 36) ||
+                        !isTextWithin(body.description, 160, true) ||
+                        !isTextWithin(body.imageUrl, 2048)) {
                         return Response.json({
-                            error: "Missing required fields",
-                            details: "id, templateId, title, and imageUrl are required",
+                            error: "Invalid required fields",
+                            details: "id, templateId, title (1-36), description (0-160), and imageUrl are required",
                             received: {
                                 id: body.id,
                                 templateId: body.templateId,
@@ -398,8 +510,8 @@ export default {
                     const workData = {
                         id: s(body.id),
                         templateId: s(body.templateId),
-                        title: s(body.title),
-                        description: s(body.description),
+                        title: cleanText(body.title),
+                        description: cleanText(body.description),
                         isAnonymous: body.isAnonymous ? 1 : 0,
                         authorId: safeUserId,
                         authorName: s(body.authorName),
@@ -420,7 +532,11 @@ export default {
                     ).run();
 
                     console.log("Work published successfully:", body.id);
-                    return Response.json({ success: true }, { headers: corsHeaders });
+                    return Response.json({
+                        id: workData.id,
+                        imageUrl: workData.imageUrl,
+                        createdAt: new Date().toISOString()
+                    }, { headers: corsHeaders });
                 } catch (err: any) {
                     console.error("Failed to publish work:", err);
                     return Response.json({
@@ -433,7 +549,15 @@ export default {
             }
 
             if (workDetailMatch && method === "DELETE") {
-                await env.DB.prepare("DELETE FROM works WHERE id = ? AND author_id = ?").bind(s(workDetailMatch[1]), safeUserId).run();
+                const id = s(workDetailMatch[1]);
+                const ownedWork: any = await env.DB.prepare("SELECT image_url FROM works WHERE id = ? AND author_id = ?").bind(id, safeUserId).first();
+                if (!ownedWork) return Response.json({ error: "Not found" }, { status: 404, headers: corsHeaders });
+                await env.DB.prepare("DELETE FROM works WHERE id = ? AND author_id = ?").bind(id, safeUserId).run();
+                await ensureWorkLikesTable(env);
+                await env.DB.prepare("DELETE FROM work_likes WHERE work_id = ?").bind(id).run();
+                const imageUrl = s(ownedWork.image_url);
+                const imageKey = imageKeyFromUrl(imageUrl);
+                if (imageKey) await env.BUCKET.delete(imageKey);
                 return Response.json({ success: true }, { headers: corsHeaders });
             }
 
@@ -442,7 +566,21 @@ export default {
                 const id = s(workActionMatch[1]);
                 const action = workActionMatch[2];
                 if (!id) return Response.json({ error: "Missing work id" }, { status: 400, headers: corsHeaders });
-                if (action === "like") await env.DB.prepare("UPDATE works SET like_count = like_count + 1 WHERE id = ?").bind(id).run();
+                if (action === "like") {
+                    const work = await env.DB.prepare("SELECT id FROM works WHERE id = ?").bind(id).first();
+                    if (!work) return Response.json({ error: "Not found" }, { status: 404, headers: corsHeaders });
+                    await ensureWorkLikesTable(env);
+                    const inserted = await env.DB.prepare("INSERT OR IGNORE INTO work_likes (work_id, user_id) VALUES (?, ?)").bind(id, safeUserId).run();
+                    if (n(inserted.meta?.changes) > 0) {
+                        await env.DB.prepare("UPDATE works SET like_count = like_count + 1 WHERE id = ?").bind(id).run();
+                    }
+                    const current: any = await env.DB.prepare("SELECT like_count FROM works WHERE id = ?").bind(id).first();
+                    return Response.json({
+                        success: true,
+                        likeCount: n(current?.like_count),
+                        alreadyLiked: n(inserted.meta?.changes) === 0
+                    }, { headers: corsHeaders });
+                }
                 // Report logic omitted; return success
                 return Response.json({ success: true }, { headers: corsHeaders });
             }
@@ -458,6 +596,12 @@ export default {
                         return Response.json({
                             error: "Empty image data",
                             code: "EMPTY_IMAGE"
+                        }, { status: 400, headers: corsHeaders });
+                    }
+                    if (!["image/jpeg", "image/png"].includes(contentType) || imageData.byteLength > 10 * 1024 * 1024) {
+                        return Response.json({
+                            error: "Invalid image",
+                            code: "INVALID_IMAGE"
                         }, { status: 400, headers: corsHeaders });
                     }
 
