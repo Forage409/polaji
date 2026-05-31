@@ -101,7 +101,13 @@ struct PayWallView: View {
                 .foregroundColor(.themeTextMain)
                 .padding(.horizontal, 4)
             
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible(), spacing: 12, alignment: .top),
+                    GridItem(.flexible(), spacing: 12, alignment: .top)
+                ],
+                spacing: 12
+            ) {
                 ForEach(0..<benefits.count, id: \.self) { idx in
                     let item = benefits[idx]
                     VStack(alignment: .leading, spacing: 8) {

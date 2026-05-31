@@ -171,6 +171,8 @@ struct MyPublishedTemplatesView: View {
                 Text(template.title)
                     .font(.system(size: 16, weight: .bold))
                     .foregroundColor(.themeTextMain)
+                    .lineLimit(2)
+                    .truncationMode(.tail)
 
                 Text("状态: \(template.status == "published" ? "已发布" : "已隐藏")")
                     .font(.system(size: 12))
@@ -217,14 +219,20 @@ struct MyPublishedTemplatesView: View {
     private func coverThumb(for raw: String) -> some View {
         if raw.hasPrefix("http://") || raw.hasPrefix("https://") {
             CachedAsyncImage(url: RemoteImageURL.resolve(raw)) { image in
-                image.resizable().scaledToFill()
+                image
+                    .resizable()
+                    .scaledToFill()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } placeholder: {
                 Rectangle()
                     .fill(Color.gray.opacity(0.15))
                     .overlay(ProgressView().scaleEffect(0.7))
             }
         } else if !raw.isEmpty, UIImage(named: raw) != nil {
-            Image(raw).resizable().scaledToFill()
+            Image.bundle(raw)
+                .resizable()
+                .scaledToFill()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             Rectangle()
                 .fill(Color.gray.opacity(0.2))

@@ -14,6 +14,8 @@ struct BrowseHistoryView: View {
                         NavigationLink(destination: BrowseHistoryTemplateDestination(entry: entry)) {
                             row(entry: entry)
                         }
+                        .buttonStyle(PlainButtonStyle())
+                        .listRowSeparator(.hidden)
                         .listRowBackground(Color.themeBackground)
                         .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                     }
@@ -62,9 +64,13 @@ struct BrowseHistoryView: View {
                     .font(.system(size: 15, weight: .bold))
                     .foregroundColor(.themeTextMain)
                     .lineLimit(1)
+                    .truncationMode(.tail)
                 Text(entry.category)
                     .font(.system(size: 11, weight: .bold))
                     .foregroundColor(Color(hex: "7B61FF"))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: 124, alignment: .leading)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
                     .background(Color(hex: "7B61FF").opacity(0.12))
@@ -72,22 +78,34 @@ struct BrowseHistoryView: View {
                 Text(relativeTime(entry.visitedAt))
                     .font(.system(size: 11))
                     .foregroundColor(.themeTextSecondary)
+                    .lineLimit(1)
             }
+            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
             Spacer()
         }
-        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, minHeight: 72, maxHeight: 72, alignment: .leading)
+        .padding(12)
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .contentShape(RoundedRectangle(cornerRadius: 14))
     }
 
     @ViewBuilder
     private func historyCover(_ raw: String) -> some View {
         if raw.hasPrefix("http://") || raw.hasPrefix("https://") {
             CachedAsyncImage(url: RemoteImageURL.resolve(raw)) { image in
-                image.resizable().scaledToFill()
+                image
+                    .resizable()
+                    .scaledToFill()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } placeholder: {
                 Color.gray.opacity(0.12)
             }
         } else {
-            Image.bundle(raw).resizable().scaledToFill()
+            Image.bundle(raw)
+                .resizable()
+                .scaledToFill()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
     

@@ -23,7 +23,10 @@ struct PublicWorkDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 CachedAsyncImage(url: RemoteImageURL.resolve(work.imageUrl)) { image in
-                    image.resizable().scaledToFill()
+                    image
+                        .resizable()
+                        .scaledToFill()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } placeholder: {
                     Rectangle()
                         .fill(Color.gray.opacity(0.15))

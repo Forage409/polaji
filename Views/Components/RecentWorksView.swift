@@ -45,6 +45,9 @@ struct RecentWorksView: View {
                                             HStack {
                                                 Text(work.category)
                                                     .font(.system(size: 10, weight: .bold))
+                                                    .lineLimit(1)
+                                                    .truncationMode(.tail)
+                                                    .frame(maxWidth: 82, alignment: .leading)
                                                     .padding(.horizontal, 6)
                                                     .padding(.vertical, 2)
                                                     .background(Color.white.opacity(0.8))
@@ -76,6 +79,8 @@ struct RecentWorksView: View {
                                         Text(work.createdAt)
                                             .font(.system(size: 11))
                                             .foregroundColor(.themeTextSecondary)
+                                            .lineLimit(1)
+                                            .truncationMode(.tail)
                                         Spacer()
                                         Image(systemName: "ellipsis")
                                             .foregroundColor(.themeTextSecondary)

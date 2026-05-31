@@ -48,8 +48,8 @@ struct TemplatesWaterfallView: View {
     @State private var hasError = false
     
     let columns = [
-        GridItem(.flexible(), spacing: 12),
-        GridItem(.flexible(), spacing: 12)
+        GridItem(.flexible(), spacing: 12, alignment: .top),
+        GridItem(.flexible(), spacing: 12, alignment: .top)
     ]
     
     var body: some View {
@@ -140,6 +140,8 @@ struct TemplateWaterfallCard: View {
                 .font(.system(size: 14, weight: .bold))
                 .foregroundColor(.themeTextMain)
                 .lineLimit(2)
+                .truncationMode(.tail)
+                .frame(height: 36, alignment: .topLeading)
 
             HStack(spacing: 4) {
                 Image(systemName: "flame.fill")
@@ -151,6 +153,7 @@ struct TemplateWaterfallCard: View {
             }
         }
         .padding(8)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .background(Color.white)
         .cornerRadius(16)
         .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 2)
@@ -161,7 +164,10 @@ struct TemplateWaterfallCard: View {
         let raw = template.coverImage
         if raw.hasPrefix("http://") || raw.hasPrefix("https://") {
             CachedAsyncImage(url: RemoteImageURL.resolve(raw)) { image in
-                image.resizable().scaledToFill()
+                image
+                    .resizable()
+                    .scaledToFill()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } placeholder: {
                 Rectangle()
                     .fill(Color.gray.opacity(0.15))
@@ -171,6 +177,7 @@ struct TemplateWaterfallCard: View {
             Image.bundle(raw)
                 .resizable()
                 .scaledToFill()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
@@ -189,8 +196,8 @@ struct WorksFeedWaterfallView: View {
     @State private var errorMessage = ""
     
     let columns = [
-        GridItem(.flexible(), spacing: 12),
-        GridItem(.flexible(), spacing: 12)
+        GridItem(.flexible(), spacing: 12, alignment: .top),
+        GridItem(.flexible(), spacing: 12, alignment: .top)
     ]
     
     var body: some View {
@@ -305,6 +312,7 @@ struct WorksFeedWaterfallView: View {
                 image
                     .resizable()
                     .scaledToFill()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } placeholder: {
                 Rectangle()
                     .fill(Color.gray.opacity(0.15))
@@ -314,18 +322,22 @@ struct WorksFeedWaterfallView: View {
                     )
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 156)
+            .frame(height: 168)
             .clipShape(RoundedRectangle(cornerRadius: 12))
             
             Text(work.title)
                 .font(.system(size: 14, weight: .bold))
                 .foregroundColor(.themeTextMain)
                 .lineLimit(2)
+                .truncationMode(.tail)
+                .frame(height: 36, alignment: .topLeading)
             
             HStack {
                 Text(work.isAnonymous ? "匿名用户" : work.authorName)
                     .font(.system(size: 11))
                     .foregroundColor(.themeTextSecondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
                 
                 Spacer()
                 

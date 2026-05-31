@@ -43,7 +43,13 @@ struct TemplatesView: View {
                 .padding(.bottom, 10)
                 
                 ScrollView {
-                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)], spacing: 16) {
+                    LazyVGrid(
+                        columns: [
+                            GridItem(.flexible(), spacing: 16, alignment: .top),
+                            GridItem(.flexible(), spacing: 16, alignment: .top)
+                        ],
+                        spacing: 16
+                    ) {
                         ForEach(filteredTemplates) { template in
                             NavigationLink(destination: TemplateDetailView(template: template)) {
                                 ZStack(alignment: .bottomLeading) {
@@ -109,7 +115,10 @@ struct TemplatesView: View {
     private func templateCover(_ template: Template) -> some View {
         if template.coverImage.hasPrefix("http://") || template.coverImage.hasPrefix("https://") {
             CachedAsyncImage(url: RemoteImageURL.resolve(template.coverImage)) { image in
-                image.resizable().scaledToFill()
+                image
+                    .resizable()
+                    .scaledToFill()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } placeholder: {
                 Color.gray.opacity(0.14)
             }
@@ -117,6 +126,7 @@ struct TemplatesView: View {
             Image.bundle(template.coverImage)
                 .resizable()
                 .scaledToFill()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 }

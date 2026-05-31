@@ -21,13 +21,20 @@ struct HotTemplatesView: View {
             }
             .padding(.horizontal)
             
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)], spacing: 16) {
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible(), spacing: 16, alignment: .top),
+                    GridItem(.flexible(), spacing: 16, alignment: .top)
+                ],
+                spacing: 16
+            ) {
                 ForEach(templates) { template in
                     NavigationLink(destination: TemplateDetailView(template: template)) {
                         ZStack(alignment: .bottomLeading) {
                             Image.bundle(template.coverImage)
                                 .resizable()
-                                .aspectRatio(3/4, contentMode: .fit)
+                                .aspectRatio(3/4, contentMode: .fill)
+                                .clipped()
                                 .background(Color.white)
                                 .clipShape(RoundedRectangle(cornerRadius: 12))
                             

@@ -6,8 +6,8 @@ struct WorksFeedView: View {
     @State private var isLoading = true
     
     let columns = [
-        GridItem(.flexible(), spacing: 12),
-        GridItem(.flexible(), spacing: 12)
+        GridItem(.flexible(), spacing: 12, alignment: .top),
+        GridItem(.flexible(), spacing: 12, alignment: .top)
     ]
     
     var body: some View {
@@ -69,23 +69,28 @@ struct WorksFeedView: View {
                 image
                     .resizable()
                     .scaledToFill()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } placeholder: {
                 Rectangle()
                     .fill(Color.gray.opacity(0.2))
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 156)
+            .frame(height: 168)
             .clipShape(RoundedRectangle(cornerRadius: 12))
             
             Text(work.title)
                 .font(.system(size: 14, weight: .bold))
                 .foregroundColor(.themeTextMain)
                 .lineLimit(2)
+                .truncationMode(.tail)
+                .frame(height: 36, alignment: .topLeading)
             
             HStack {
                 Text(work.isAnonymous ? "匿名用户" : work.authorName)
                     .font(.system(size: 11))
                     .foregroundColor(.themeTextSecondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
                 
                 Spacer()
                 

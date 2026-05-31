@@ -39,7 +39,10 @@ struct MyWorksView: View {
             } else {
                 ScrollView {
                     LazyVGrid(
-                        columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)],
+                        columns: [
+                            GridItem(.flexible(), spacing: 12, alignment: .top),
+                            GridItem(.flexible(), spacing: 12, alignment: .top)
+                        ],
                         spacing: 12
                     ) {
                         ForEach(filteredWorks) { work in
@@ -207,6 +210,9 @@ struct WorkCardCell: View {
                         Text(work.category)
                             .font(.system(size: 10, weight: .bold))
                             .foregroundColor(.white)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .frame(maxWidth: 92, alignment: .leading)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
                             .background(Color.black.opacity(0.45))
@@ -219,6 +225,8 @@ struct WorkCardCell: View {
                             .font(.system(size: 14, weight: .bold))
                             .foregroundColor(.themeTextMain)
                             .lineLimit(2)
+                            .truncationMode(.tail)
+                            .frame(height: 36, alignment: .topLeading)
                             .multilineTextAlignment(.leading)
                         HStack(spacing: 4) {
                             Image(systemName: "clock")
@@ -227,6 +235,8 @@ struct WorkCardCell: View {
                             Text(work.createdAt)
                                 .font(.system(size: 11))
                                 .foregroundColor(.themeTextSecondary)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
                         }
                     }
                     .padding(12)

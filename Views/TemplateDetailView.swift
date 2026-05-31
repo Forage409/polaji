@@ -105,7 +105,10 @@ struct TemplateDetailView: View {
         let raw = template.coverImage
         if raw.hasPrefix("http://") || raw.hasPrefix("https://") {
             CachedAsyncImage(url: RemoteImageURL.resolve(raw)) { image in
-                image.resizable().scaledToFill()
+                image
+                    .resizable()
+                    .scaledToFill()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } placeholder: {
                 Rectangle()
                     .fill(Color.gray.opacity(0.15))
@@ -115,6 +118,7 @@ struct TemplateDetailView: View {
             Image.bundle(raw)
                 .resizable()
                 .scaledToFill()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 }
