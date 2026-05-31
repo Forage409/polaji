@@ -55,22 +55,16 @@ struct RecentWorksView: View {
                                             Spacer()
                                         }
                                         
-                                        if work.imagePath.starts(with: "/") || work.imagePath.starts(with: "file://") {
-                                            if let uiImage = UIImage(contentsOfFile: work.imagePath) {
-                                                Image(uiImage: uiImage)
-                                                    .resizable()
-                                                    .scaledToFill()
-                                            } else {
-                                                Image(systemName: "photo")
-                                                    .resizable()
-                                                    .scaledToFit()
-                                                    .padding(15)
-                                                    .foregroundColor(.gray)
-                                            }
-                                        } else {
-                                            Image.bundle(work.imagePath.replacingOccurrences(of: ".png", with: ""))
+                                        if let uiImage = ImageExportManager.shared.loadImage(from: work.imagePath) {
+                                            Image(uiImage: uiImage)
                                                 .resizable()
                                                 .scaledToFill()
+                                        } else {
+                                            Image(systemName: "photo")
+                                                .resizable()
+                                                .scaledToFit()
+                                                .padding(15)
+                                                .foregroundColor(.gray)
                                         }
                                     }
                                     .frame(height: 120)

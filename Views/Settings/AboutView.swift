@@ -1,18 +1,20 @@
 import SwiftUI
- 
+
 struct AboutView: View {
     private var appName: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
             ?? Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String
             ?? "整活局"
     }
+
     private var version: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0.0"
     }
+
     private var build: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
     }
-    
+
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
@@ -36,10 +38,10 @@ struct AboutView: View {
                         .padding(.top, 4)
                 }
                 .padding(.top, 30)
-                
+
                 VStack(alignment: .leading, spacing: 0) {
                     aboutRow(title: "产品介绍") {
-                        Text("整活局是一款本地运行的中文整活卡片生成器。选择模板 → 填写昵称或关键词 → 一键生成可分享的搞笑人设卡、判决书、投票榜或状态卡。所有内容均为本地随机生成，仅供朋友间娱乐。")
+                        Text("整活局是一款中文娱乐卡片生成器。生成逻辑在本地运行；当你主动发布玩法或广场作品时，相关公开内容会上传到云端供其他用户浏览。")
                             .font(.system(size: 14))
                             .foregroundColor(.themeTextMain.opacity(0.85))
                             .lineSpacing(4)
@@ -61,12 +63,12 @@ struct AboutView: View {
                 .background(Color.white)
                 .cornerRadius(14)
                 .padding(.horizontal, 16)
-                
+
                 Text("© 2026 整活局 · 所有权利保留")
                     .font(.system(size: 11))
                     .foregroundColor(.themeTextSecondary)
                     .padding(.top, 20)
-                
+
                 Spacer(minLength: 40)
             }
         }
@@ -74,7 +76,7 @@ struct AboutView: View {
         .navigationTitle("关于整活局")
         .navigationBarTitleDisplayMode(.inline)
     }
-    
+
     @ViewBuilder
     private func aboutRow<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -86,14 +88,14 @@ struct AboutView: View {
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
-    
+
     private func rowItem(title: String, hint: String?) -> some View {
         HStack {
             Text(title)
                 .font(.system(size: 15))
                 .foregroundColor(.themeTextMain)
             Spacer()
-            if let hint = hint {
+            if let hint {
                 Text(hint)
                     .font(.system(size: 13))
                     .foregroundColor(.themeTextSecondary)

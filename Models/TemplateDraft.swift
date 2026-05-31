@@ -15,4 +15,5 @@ class TemplateDraft: ObservableObject {
     ]
 
     @Published var cardStyle: TemplateCardStyle = TemplateCardStyle()
+    @Published var resultConfig: TemplateResultConfig = .default
 }

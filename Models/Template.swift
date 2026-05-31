@@ -14,6 +14,8 @@ struct Template: Identifiable {
     var customFields: [TemplateField]? = nil
     /// 用户自定义模板的卡片样式（背景、圆角、装饰）。
     var cardStyle: TemplateCardStyle = TemplateCardStyle()
+    /// 结果图设计配置。官方玩法和用户玩法共用同一套模块化渲染器。
+    var resultConfig: TemplateResultConfig = .default
 }
 
 extension Template {
@@ -30,5 +32,6 @@ extension Template {
         let cfg = TemplateFormConfig.parse(remote.formConfigRaw)
         self.customFields = cfg.fields.isEmpty ? nil : cfg.fields
         self.cardStyle = cfg.cardStyle
+        self.resultConfig = TemplateResultConfig.parse(remote.resultConfigRaw, legacyStyle: cfg.cardStyle)
     }
 }

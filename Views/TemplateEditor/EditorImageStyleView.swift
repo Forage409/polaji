@@ -1,37 +1,42 @@
 import SwiftUI
 
-/// 玩法生成卡片的视觉样式：背景主题、圆角、装饰开关、标题对齐。
-/// 仅影响最终生成的卡片，不影响填写页。
 struct EditorImageStyleView: View {
     @ObservedObject var draft: TemplateDraft
+
+    private var previewDocument: ResultCardDocument {
+        ResultCardDocument.preview(config: draft.resultConfig, title: draft.title, fields: draft.fields)
+    }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 header
 
-                // 实时预览
-                preview
-                    .padding(.horizontal, 16)
+                UnifiedResultCardUI(document: previewDocument)
+                    .frame(maxWidth: .infinity)
 
-                // 背景主题
-                section(title: "背景主题") {
-                    bgChooser
+                section(title: "结果版式", hint: "选择最适合玩法内容的排版") {
+                    layoutPicker
                 }
 
-                // 圆角
-                section(title: "圆角强度") {
-                    cornerChooser
+                section(title: "默认主题", hint: "生成结果时默认使用") {
+                    themePicker
                 }
 
-                // 标题对齐
-                section(title: "标题排版") {
-                    alignChooser
+                section(title: "参与者可切换主题", hint: "至少保留默认主题") {
+                    allowedThemes
                 }
 
-                // 装饰开关
-                section(title: "装饰元素") {
-                    decorationToggles
+                section(title: "默认主贴纸", hint: "可在生成结果后替换") {
+                    heroStickerPicker
+                }
+
+                section(title: "默认装饰贴纸", hint: "最多选择 3 个") {
+                    decorationPicker
+                }
+
+                section(title: "结果模块", hint: "控制展示内容和顺序") {
+                    moduleEditor
                 }
 
                 Spacer(minLength: 40)
@@ -43,174 +48,239 @@ struct EditorImageStyleView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
-                Text("图片样式")
+                Text("结果图设计")
                     .font(.system(size: 18, weight: .bold))
                 Image(systemName: "wand.and.stars")
                     .foregroundColor(.themePrimary)
-                    .font(.system(size: 13))
             }
-            Text("打造更好看的结果图，提升分享率。")
+            Text("发布者先定好默认模板，参与者生成后还能轻量换肤。")
                 .font(.system(size: 12))
                 .foregroundColor(.themeTextSecondary)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 24)
     }
 
-    @ViewBuilder
-    private var preview: some View {
-        let sampleFields: [(label: String, value: String)] = previewSample()
-        CustomResultCardUI(
-            templateName: draft.title.isEmpty ? "玩法标题" : draft.title,
-            authorName: "预览",
-            fields: sampleFields,
-            style: draft.cardStyle
-        )
-    }
-
-    private func previewSample() -> [(label: String, value: String)] {
-        let visible = draft.fields.prefix(3)
-        if visible.isEmpty {
-            return [("昵称", "小幽灵"), ("心情", "开心")]
-        }
-        return visible.map { f in
-            (f.label, sampleValue(for: f))
-        }
-    }
-
-    private func sampleValue(for field: TemplateField) -> String {
-        switch field.type {
-        case .text: return "示例内容"
-        case .number: return "88"
-        case .singleSelect: return field.options.first ?? "选项 A"
-        case .multiSelect: return field.options.prefix(2).joined(separator: "、")
-        case .participants: return "小明、小美、阿杰"
-        }
-    }
-
-    @ViewBuilder
-    private func section<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
+    private func section<Content: View>(title: String, hint: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(title)
-                .font(.system(size: 14, weight: .bold))
-                .foregroundColor(.themeTextMain)
-                .padding(.horizontal, 24)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(.themeTextMain)
+                Text(hint)
+                    .font(.system(size: 11))
+                    .foregroundColor(.themeTextSecondary)
+            }
+            .padding(.horizontal, 20)
             content()
-                .padding(.horizontal, 16)
         }
     }
 
-    @ViewBuilder
-    private var bgChooser: some View {
+    private var layoutPicker: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(ResultLayoutPreset.allCases) { layout in
+                    choiceChip(
+                        title: layout.displayName,
+                        selected: draft.resultConfig.layout == layout
+                    ) {
+                        draft.resultConfig.layout = layout
+                    }
+                }
+            }
+            .padding(.horizontal, 20)
+        }
+    }
+
+    private var themePicker: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 12) {
-                ForEach(TemplateCardStyle.Background.allCases, id: \.self) { bg in
-                    let selected = draft.cardStyle.background == bg
-                    VStack(spacing: 6) {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 14)
-                                .fill(StyleRenderer.gradient(for: bg))
-                                .frame(width: 64, height: 64)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 14)
-                                        .stroke(selected ? Color.themePrimary : Color.clear, lineWidth: 3)
-                                )
-                            if selected {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(.themePrimary)
-                                    .background(Circle().fill(Color.white))
-                                    .offset(x: 22, y: -22)
-                            }
-                        }
-                        Text(bg.displayName)
-                            .font(.system(size: 11))
-                            .foregroundColor(selected ? .themeTextMain : .themeTextSecondary)
+                ForEach(ResultThemePack.all) { pack in
+                    themeCard(pack, selected: draft.resultConfig.defaultThemePackId == pack.id) {
+                        selectDefaultTheme(pack)
                     }
-                    .onTapGesture { draft.cardStyle.background = bg }
                 }
             }
-            .padding(.horizontal, 8)
+            .padding(.horizontal, 20)
         }
     }
 
-    @ViewBuilder
-    private var cornerChooser: some View {
-        HStack(spacing: 10) {
-            ForEach(TemplateCardStyle.CornerLevel.allCases, id: \.self) { level in
-                let selected = draft.cardStyle.corner == level
-                VStack(spacing: 6) {
-                    RoundedRectangle(cornerRadius: level.radius / 2)
-                        .fill(Color.themePrimary.opacity(selected ? 0.4 : 0.15))
-                        .frame(height: 36)
-                    Text(level.displayName)
-                        .font(.system(size: 12))
-                        .foregroundColor(selected ? .themeTextMain : .themeTextSecondary)
+    private var allowedThemes: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(ResultThemePack.all) { pack in
+                    let selected = draft.resultConfig.allowedThemePackIds.contains(pack.id)
+                    choiceChip(title: pack.displayName, selected: selected) {
+                        toggleAllowedTheme(pack.id)
+                    }
                 }
-                .frame(maxWidth: .infinity)
-                .padding(8)
-                .background(selected ? Color.themePrimary.opacity(0.12) : Color.gray.opacity(0.06))
-                .cornerRadius(12)
-                .onTapGesture { draft.cardStyle.corner = level }
             }
+            .padding(.horizontal, 20)
         }
     }
 
-    @ViewBuilder
-    private var alignChooser: some View {
-        HStack(spacing: 10) {
-            ForEach(TemplateCardStyle.TitleAlign.allCases, id: \.self) { align in
-                let selected = draft.cardStyle.titleAlign == align
-                HStack(spacing: 6) {
-                    Image(systemName: align == .center ? "text.aligncenter" : "text.alignleft")
-                    Text(align.displayName)
-                        .font(.system(size: 13, weight: .bold))
+    private var heroStickerPicker: some View {
+        let pack = ResultThemePack.find(draft.resultConfig.defaultThemePackId)
+        return HStack(spacing: 12) {
+            ForEach(pack.heroStickers, id: \.self) { name in
+                stickerButton(name, selected: draft.resultConfig.defaultHeroStickerId == name) {
+                    draft.resultConfig.defaultHeroStickerId = name
                 }
-                .foregroundColor(selected ? .themeTextMain : .themeTextSecondary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(selected ? Color.themePrimary.opacity(0.18) : Color.gray.opacity(0.06))
-                .cornerRadius(12)
-                .onTapGesture { draft.cardStyle.titleAlign = align }
             }
+            Spacer()
         }
+        .padding(.horizontal, 20)
     }
 
-    @ViewBuilder
-    private var decorationToggles: some View {
-        VStack(spacing: 0) {
-            decoToggle(label: "✦ 星星", isOn: Binding(
-                get: { draft.cardStyle.showStars },
-                set: { draft.cardStyle.showStars = $0 }
-            ))
-            Divider().padding(.leading, 16)
-            decoToggle(label: "❤︎ 爱心", isOn: Binding(
-                get: { draft.cardStyle.showHearts },
-                set: { draft.cardStyle.showHearts = $0 }
-            ))
-            Divider().padding(.leading, 16)
-            decoToggle(label: "✧ 彩纸", isOn: Binding(
-                get: { draft.cardStyle.showConfetti },
-                set: { draft.cardStyle.showConfetti = $0 }
-            ))
-            Divider().padding(.leading, 16)
-            decoToggle(label: "♕ 徽章", isOn: Binding(
-                get: { draft.cardStyle.showBadge },
-                set: { draft.cardStyle.showBadge = $0 }
-            ))
+    private var decorationPicker: some View {
+        let pack = ResultThemePack.find(draft.resultConfig.defaultThemePackId)
+        return HStack(spacing: 12) {
+            ForEach(pack.decorationStickers, id: \.self) { name in
+                stickerButton(name, selected: draft.resultConfig.defaultDecorationStickerIds.contains(name)) {
+                    toggleDecoration(name)
+                }
+            }
+            Spacer()
         }
-        .background(Color.white)
-        .cornerRadius(12)
-        .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 1)
+        .padding(.horizontal, 20)
     }
 
-    private func decoToggle(label: String, isOn: Binding<Bool>) -> some View {
-        Toggle(isOn: isOn) {
-            Text(label)
-                .font(.system(size: 14, weight: .medium))
+    private var moduleEditor: some View {
+        VStack(spacing: 8) {
+            ForEach(draft.resultConfig.moduleOrder) { module in
+                HStack(spacing: 10) {
+                    Image(systemName: module.isRequired ? "lock.fill" : "square.stack.3d.up.fill")
+                        .foregroundColor(module.isRequired ? .themeTextSecondary : .themePrimary)
+                        .frame(width: 20)
+                    Text(module.displayName)
+                        .font(.system(size: 14, weight: .medium))
+                    Spacer()
+                    if !module.isRequired {
+                        Button(action: { toggleModule(module) }) {
+                            Image(systemName: draft.resultConfig.hiddenModules.contains(module) ? "eye.slash" : "eye")
+                        }
+                    }
+                    Button(action: { moveModule(module, offset: -1) }) {
+                        Image(systemName: "chevron.up")
+                    }
+                    Button(action: { moveModule(module, offset: 1) }) {
+                        Image(systemName: "chevron.down")
+                    }
+                }
+                .font(.system(size: 13, weight: .bold))
                 .foregroundColor(.themeTextMain)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 11)
+                .background(Color.white)
+                .cornerRadius(12)
+            }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .tint(.themePrimary)
+        .padding(.horizontal, 20)
+    }
+
+    private func themeCard(_ pack: ResultThemePack, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 5) {
+                ZStack {
+                    Image.bundle(pack.backgrounds[0])
+                        .resizable()
+                        .scaledToFill()
+                    pack.cardColor.opacity(0.28)
+                    Image.bundle(pack.heroStickers[0])
+                        .resizable()
+                        .scaledToFit()
+                        .padding(6)
+                }
+                .frame(width: 108, height: 92)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                Text(pack.displayName)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(.themeTextMain)
+                Text(pack.tagline)
+                    .font(.system(size: 10))
+                    .foregroundColor(.themeTextSecondary)
+                    .lineLimit(1)
+            }
+            .padding(8)
+            .background(selected ? Color.themePrimary.opacity(0.22) : Color.white)
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(selected ? Color.themePrimary : Color.clear, lineWidth: 2)
+            )
+            .cornerRadius(14)
+        }
+    }
+
+    private func stickerButton(_ imageName: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image.bundle(imageName)
+                .resizable()
+                .scaledToFit()
+                .padding(6)
+                .frame(width: 58, height: 58)
+                .background(selected ? Color.themePrimary.opacity(0.2) : Color.white)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(selected ? Color.themePrimary : Color.clear, lineWidth: 2)
+                )
+                .cornerRadius(12)
+        }
+    }
+
+    private func choiceChip(title: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(.themeTextMain)
+                .padding(.horizontal, 13)
+                .padding(.vertical, 8)
+                .background(selected ? Color.themePrimary : Color.white)
+                .cornerRadius(16)
+        }
+    }
+
+    private func selectDefaultTheme(_ pack: ResultThemePack) {
+        draft.resultConfig.defaultThemePackId = pack.id
+        if !draft.resultConfig.allowedThemePackIds.contains(pack.id) {
+            draft.resultConfig.allowedThemePackIds.append(pack.id)
+        }
+        draft.resultConfig.defaultHeroStickerId = pack.heroStickers.first
+        draft.resultConfig.defaultDecorationStickerIds = Array(pack.decorationStickers.prefix(2))
+    }
+
+    private func toggleAllowedTheme(_ id: String) {
+        guard id != draft.resultConfig.defaultThemePackId else { return }
+        if let index = draft.resultConfig.allowedThemePackIds.firstIndex(of: id) {
+            draft.resultConfig.allowedThemePackIds.remove(at: index)
+        } else {
+            draft.resultConfig.allowedThemePackIds.append(id)
+        }
+    }
+
+    private func toggleDecoration(_ name: String) {
+        if let index = draft.resultConfig.defaultDecorationStickerIds.firstIndex(of: name) {
+            draft.resultConfig.defaultDecorationStickerIds.remove(at: index)
+        } else if draft.resultConfig.defaultDecorationStickerIds.count < 3 {
+            draft.resultConfig.defaultDecorationStickerIds.append(name)
+        }
+    }
+
+    private func toggleModule(_ module: ResultModuleKind) {
+        if let index = draft.resultConfig.hiddenModules.firstIndex(of: module) {
+            draft.resultConfig.hiddenModules.remove(at: index)
+        } else {
+            let visibleContent = draft.resultConfig.moduleOrder.filter {
+                !$0.isRequired && !draft.resultConfig.hiddenModules.contains($0)
+            }
+            if visibleContent.count > 1 {
+                draft.resultConfig.hiddenModules.append(module)
+            }
+        }
+    }
+
+    private func moveModule(_ module: ResultModuleKind, offset: Int) {
+        guard let index = draft.resultConfig.moduleOrder.firstIndex(of: module) else { return }
+        let destination = index + offset
+        guard draft.resultConfig.moduleOrder.indices.contains(destination) else { return }
+        draft.resultConfig.moduleOrder.swapAt(index, destination)
     }
 }

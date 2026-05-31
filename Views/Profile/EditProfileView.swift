@@ -12,10 +12,16 @@ struct EditProfileView: View {
     @State private var selectedItem: PhotosPickerItem? = nil
     
     private let avatarOptions: [String] = [
-        "logo", "banner_character",
-        "tpl_persona", "tpl_judge", "tpl_vote",
-        "tpl_truth_dare", "tpl_rich", "tpl_stay_up",
-        "tpl_single", "tpl_boss"
+        "logo",
+        "theme_dreamy_persona_hero_1",
+        "theme_pop_party_hero_1",
+        "theme_pink_crush_hero_1",
+        "theme_midnight_mode_hero_1",
+        "theme_office_satire_hero_1",
+        "theme_courtroom_red_hero_1",
+        "theme_fortune_gold_hero_1",
+        "theme_campus_fun_hero_1",
+        "theme_weekend_chill_hero_1"
     ]
     
     var body: some View {

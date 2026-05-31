@@ -15,38 +15,14 @@ struct EditorPreviewPublishView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal)
                 
-                // Horizontal WeChat moments style preview
-                HStack(spacing: 12) {
-                    if let image = draft.coverImage {
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 80, height: 80)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                    } else {
-                        Rectangle()
-                            .fill(Color.gray.opacity(0.2))
-                            .frame(width: 80, height: 80)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                    }
-                    
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(draft.title.isEmpty ? "玩法标题" : draft.title)
-                            .font(.system(size: 16, weight: .bold))
-                            .lineLimit(1)
-                        
-                        Text(draft.description.isEmpty ? "玩法描述..." : draft.description)
-                            .font(.system(size: 13))
-                            .foregroundColor(.themeTextSecondary)
-                            .lineLimit(2)
-                    }
-                    Spacer()
-                }
-                .padding(16)
-                .background(Color.white)
-                .cornerRadius(12)
-                .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
-                .padding(.horizontal, 20)
+                UnifiedResultCardUI(
+                    document: ResultCardDocument.preview(
+                        config: draft.resultConfig,
+                        title: draft.title,
+                        fields: draft.fields
+                    )
+                )
+                .frame(maxWidth: .infinity)
                 
                 Button(action: {
                     publish()
@@ -110,6 +86,7 @@ struct EditorPreviewPublishView: View {
             fields: self.draft.fields,
             cardStyle: self.draft.cardStyle
         ).toJSONString()
+        let resultConfigJSON = self.draft.resultConfig.toJSONString()
         let dismissAction = self.dismiss
 
         Task {
@@ -136,7 +113,7 @@ struct EditorPreviewPublishView: View {
                     createdAt: "",
                     updatedAt: "",
                     formConfigRaw: formConfigJSON,
-                    resultConfigRaw: nil
+                    resultConfigRaw: resultConfigJSON
                 )
 
                 let success = try await RemoteTemplateService.shared.createTemplate(draft: draftTemplate)
