@@ -95,7 +95,12 @@ struct TemplatesWaterfallView: View {
                 let fetched = try await RemoteTemplateService.shared.fetchTemplates()
                 await MainActor.run {
                     MockData.updateUsageCounts(from: fetched)
-                    self.templates = MockData.allTemplates
+                    // Merge: keep local mocks, append any remote templates not already in MockData
+                    let mockIds = Set(MockData.allTemplates.map { $0.id })
+                    let extras = fetched
+                        .filter { !mockIds.contains($0.id) }
+                        .map { Template(from: $0) }
+                    self.templates = MockData.allTemplates + extras
                 }
             } catch {
                 print("Failed to load real templates: \(error)")
@@ -109,18 +114,16 @@ struct TemplatesWaterfallView: View {
 
 struct TemplateWaterfallCard: View {
     let template: Template
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             ZStack(alignment: .topTrailing) {
-                Image.bundle(template.coverImage)
-                    .resizable()
-                    .scaledToFill()
+                coverImageView
                     .frame(minWidth: 0, maxWidth: .infinity)
-                    .frame(height: 200) // Fixed height or dynamic, usually Pinterest style has dynamic, but fixed is safer for UI
+                    .frame(height: 200)
                     .clipped()
                     .cornerRadius(12)
-                
+
                 if template.category == "投票" {
                     Text("🔥 热门")
                         .font(.system(size: 10, weight: .bold))
@@ -132,12 +135,12 @@ struct TemplateWaterfallCard: View {
                         .padding(8)
                 }
             }
-            
+
             Text(template.name)
                 .font(.system(size: 14, weight: .bold))
                 .foregroundColor(.themeTextMain)
                 .lineLimit(2)
-            
+
             HStack(spacing: 4) {
                 Image(systemName: "flame.fill")
                     .font(.system(size: 10))
@@ -152,7 +155,25 @@ struct TemplateWaterfallCard: View {
         .cornerRadius(16)
         .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 2)
     }
-    
+
+    @ViewBuilder
+    private var coverImageView: some View {
+        let raw = template.coverImage
+        if raw.hasPrefix("http://") || raw.hasPrefix("https://") {
+            AsyncImage(url: URL(string: raw)) { image in
+                image.resizable().scaledToFill()
+            } placeholder: {
+                Rectangle()
+                    .fill(Color.gray.opacity(0.15))
+                    .overlay(ProgressView())
+            }
+        } else {
+            Image.bundle(raw)
+                .resizable()
+                .scaledToFill()
+        }
+    }
+
     private func formatCount(_ count: Int) -> String {
         return "\(count)"
     }

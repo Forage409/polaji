@@ -129,27 +129,22 @@ struct MyPublishedTemplatesView: View {
     @ViewBuilder
     private func publishedTemplateCard(_ template: RemoteTemplate) -> some View {
         HStack(spacing: 12) {
-            Rectangle()
-                .fill(Color.gray.opacity(0.2))
+            coverThumb(for: template.coverImage)
                 .frame(width: 80, height: 80)
                 .cornerRadius(12)
-                .overlay(
-                    Text("无封面")
-                        .font(.system(size: 10))
-                        .foregroundColor(.gray)
-                )
-            
+                .clipped()
+
             VStack(alignment: .leading, spacing: 6) {
                 Text(template.title)
                     .font(.system(size: 16, weight: .bold))
                     .foregroundColor(.themeTextMain)
-                
+
                 Text("状态: \(template.status == "published" ? "已发布" : "未知")")
                     .font(.system(size: 12))
                     .foregroundColor(.themePrimary)
-                
+
                 Spacer()
-                
+
                 HStack(spacing: 16) {
                     statMini(icon: "eye", val: template.viewCount)
                     statMini(icon: "wand.and.stars", val: template.generateCount)
@@ -164,6 +159,29 @@ struct MyPublishedTemplatesView: View {
         .background(Color.white)
         .cornerRadius(16)
         .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+    }
+
+    @ViewBuilder
+    private func coverThumb(for raw: String) -> some View {
+        if raw.hasPrefix("http://") || raw.hasPrefix("https://") {
+            AsyncImage(url: URL(string: raw)) { image in
+                image.resizable().scaledToFill()
+            } placeholder: {
+                Rectangle()
+                    .fill(Color.gray.opacity(0.15))
+                    .overlay(ProgressView().scaleEffect(0.7))
+            }
+        } else if !raw.isEmpty, UIImage(named: raw) != nil {
+            Image(raw).resizable().scaledToFill()
+        } else {
+            Rectangle()
+                .fill(Color.gray.opacity(0.2))
+                .overlay(
+                    Text("无封面")
+                        .font(.system(size: 10))
+                        .foregroundColor(.gray)
+                )
+        }
     }
     
     private func statMini(icon: String, val: Int) -> some View {
