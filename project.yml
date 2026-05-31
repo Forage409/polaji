@@ -7,15 +7,15 @@ targets:
     platform: iOS
     deploymentTarget: "16.0"
     sources:
-      - path: .
-        excludes:
-          - "**/*.md"
-          - "codemagic.yaml"
-          - "project.yml"
-          - ".git"
-          - "scratch"
-          - "backend"
-          - "devin_diffs"
+      - path: ContentView.swift
+      - path: ZhengHuoJuApp.swift
+      - path: Models
+      - path: Utils
+      - path: Views
+      - path: Resources
+        buildPhase: resources
+      - path: Assets.xcassets
+        buildPhase: resources
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.zhenghuoju.app
       GENERATE_INFOPLIST_FILE: YES

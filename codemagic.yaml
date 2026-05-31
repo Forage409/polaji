@@ -60,6 +60,12 @@ workflows:
             echo "No .app bundle found"
             exit 1
           fi
+          BAD_FILES="$(find "$APP_PATH" \( -name '*.ps1' -o -name '*.txt' -o -name '*.ts' -o -name '*.yml' -o -name '*.yaml' -o -path '*/backend/*' -o -path '*/devin_diffs/*' \) -print)"
+          if [ -n "$BAD_FILES" ]; then
+            echo "Unexpected development files found in app bundle:"
+            echo "$BAD_FILES"
+            exit 1
+          fi
           rm -rf build/unsigned-ipa build/ZhengHuoJu-unsigned.ipa
           mkdir -p build/unsigned-ipa/Payload
           cp -R "$APP_PATH" build/unsigned-ipa/Payload/
