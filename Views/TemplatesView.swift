@@ -108,7 +108,7 @@ struct TemplatesView: View {
     @ViewBuilder
     private func templateCover(_ template: Template) -> some View {
         if template.coverImage.hasPrefix("http://") || template.coverImage.hasPrefix("https://") {
-            CachedAsyncImage(url: URL(string: template.coverImage)) { image in
+            CachedAsyncImage(url: RemoteImageURL.resolve(template.coverImage)) { image in
                 image.resizable().scaledToFill()
             } placeholder: {
                 Color.gray.opacity(0.14)

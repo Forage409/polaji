@@ -216,7 +216,7 @@ struct MyPublishedTemplatesView: View {
     @ViewBuilder
     private func coverThumb(for raw: String) -> some View {
         if raw.hasPrefix("http://") || raw.hasPrefix("https://") {
-            CachedAsyncImage(url: URL(string: raw)) { image in
+            CachedAsyncImage(url: RemoteImageURL.resolve(raw)) { image in
                 image.resizable().scaledToFill()
             } placeholder: {
                 Rectangle()

@@ -192,13 +192,15 @@ struct WorkCardCell: View {
                             Image(uiImage: uiImage)
                                 .resizable()
                                 .scaledToFill()
-                                .frame(height: 200)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 176)
                                 .clipped()
                         } else {
                             Image.bundle(coverPlaceholder())
                                 .resizable()
                                 .scaledToFill()
-                                .frame(height: 200)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 176)
                                 .clipped()
                         }
                         
@@ -232,6 +234,7 @@ struct WorkCardCell: View {
                 .background(Color.white)
                 .cornerRadius(14)
                 .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
+                .frame(maxWidth: .infinity)
                 
                 Button(action: { showActions = true }) {
                     ZStack {

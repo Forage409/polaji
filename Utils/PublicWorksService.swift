@@ -17,7 +17,15 @@ class PublicWorksService {
 
     func fetchMyPublishedWorks() async throws -> [PublicWork] {
         let request = try APIClient.shared.createRequest(path: "/api/creator/works")
-        return try await APIClient.shared.performRequest(request: request)
+        do {
+            return try await APIClient.shared.performRequest(request: request)
+        } catch APIError.notFound {
+            // Compatibility for an older Worker that has not deployed
+            // /api/creator/works yet. Older feeds still exposed the owner ID.
+            let currentUserId = AnonymousIdentityManager.shared.currentUserId
+            let visibleWorks = try await fetchWorksFeed(limit: 50)
+            return visibleWorks.filter { $0.authorId == currentUserId }
+        }
     }
     
     func publishWork(title: String, description: String, isAnonymous: Bool, tags: [String], templateId: String, category: String, imageData: Data) async throws -> PublishedWorkReceipt {

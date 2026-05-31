@@ -22,16 +22,17 @@ struct PublicWorkDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                CachedAsyncImage(url: URL(string: work.imageUrl)) { image in
-                    image.resizable().scaledToFit()
+                CachedAsyncImage(url: RemoteImageURL.resolve(work.imageUrl)) { image in
+                    image.resizable().scaledToFill()
                 } placeholder: {
                     Rectangle()
                         .fill(Color.gray.opacity(0.15))
                         .aspectRatio(3/4, contentMode: .fit)
                         .overlay(ProgressView())
                 }
-                .cornerRadius(16)
-                .padding(.horizontal, 16)
+                .frame(width: 260, height: 325)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .frame(maxWidth: .infinity)
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text(work.title)
@@ -161,7 +162,12 @@ struct PublicWorkDetailView: View {
             do {
                 let receipt = try await PublicWorksService.shared.likeWork(id: work.id)
                 await MainActor.run {
-                    likeCount = receipt.likeCount
+                    likeCount = receipt.likeCount ?? likeCount
+                    NotificationCenter.default.post(
+                        name: NSNotification.Name("PublicWorkLikeChanged"),
+                        object: nil,
+                        userInfo: ["id": work.id, "likeCount": likeCount]
+                    )
                     isProcessingLike = false
                 }
             } catch {
@@ -177,7 +183,7 @@ struct PublicWorkDetailView: View {
     }
 
     private func saveImage() {
-        guard let url = URL(string: work.imageUrl) else { return }
+        guard let url = RemoteImageURL.resolve(work.imageUrl) else { return }
         Task {
             do {
                 let (data, _) = try await URLSession.shared.data(from: url)

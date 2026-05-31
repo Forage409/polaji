@@ -160,7 +160,7 @@ struct TemplateWaterfallCard: View {
     private var coverImageView: some View {
         let raw = template.coverImage
         if raw.hasPrefix("http://") || raw.hasPrefix("https://") {
-            CachedAsyncImage(url: URL(string: raw)) { image in
+            CachedAsyncImage(url: RemoteImageURL.resolve(raw)) { image in
                 image.resizable().scaledToFill()
             } placeholder: {
                 Rectangle()
@@ -181,6 +181,7 @@ struct TemplateWaterfallCard: View {
 
 // MARK: - Works Waterfall
 struct WorksFeedWaterfallView: View {
+    @StateObject private var likeStore = LikedWorksStore.shared
     @State private var works: [PublicWork] = []
     @State private var isLoading = true
     @State private var isLoadingMore = false
@@ -257,6 +258,12 @@ struct WorksFeedWaterfallView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshWorksFeed"))) { _ in
             loadWorks(reset: true)
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PublicWorkLikeChanged"))) { note in
+            guard let id = note.userInfo?["id"] as? String,
+                  let likeCount = note.userInfo?["likeCount"] as? Int,
+                  let index = works.firstIndex(where: { $0.id == id }) else { return }
+            works[index].likeCount = likeCount
+        }
     }
 
     private func loadWorks(reset: Bool) {
@@ -294,21 +301,21 @@ struct WorksFeedWaterfallView: View {
     @ViewBuilder
     private func workFeedCard(_ work: PublicWork) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            CachedAsyncImage(url: URL(string: work.imageUrl)) { image in
+            CachedAsyncImage(url: RemoteImageURL.resolve(work.imageUrl)) { image in
                 image
                     .resizable()
-                    .scaledToFit()
-                    .cornerRadius(12)
+                    .scaledToFill()
             } placeholder: {
                 Rectangle()
                     .fill(Color.gray.opacity(0.15))
-                    .aspectRatio(3/4, contentMode: .fit)
-                    .cornerRadius(12)
                     .overlay(
                         Image(systemName: "photo")
                             .foregroundColor(.gray.opacity(0.5))
                     )
             }
+            .frame(maxWidth: .infinity)
+            .frame(height: 156)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
             
             Text(work.title)
                 .font(.system(size: 14, weight: .bold))
@@ -323,15 +330,16 @@ struct WorksFeedWaterfallView: View {
                 Spacer()
                 
                 HStack(spacing: 2) {
-                    Image(systemName: "heart")
+                    Image(systemName: likeStore.isLiked(work.id) ? "heart.fill" : "heart")
                         .font(.system(size: 10))
                     Text("\(work.likeCount)")
                         .font(.system(size: 11))
                 }
-                .foregroundColor(.themeTextSecondary)
+                .foregroundColor(likeStore.isLiked(work.id) ? .red : .themeTextSecondary)
             }
         }
         .padding(8)
+        .frame(maxWidth: .infinity)
         .background(Color.white)
         .cornerRadius(16)
         .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)

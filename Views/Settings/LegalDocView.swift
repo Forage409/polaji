@@ -55,37 +55,44 @@ struct LegalDocView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 0) {
                 Text(kind.title)
-                    .font(.system(size: 26, weight: .heavy))
+                    .font(.system(size: 24, weight: .bold))
                     .foregroundColor(.themeTextMain)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, 10)
                 Text("生效日期：2026 年 6 月 1 日")
                     .font(.system(size: 12))
                     .foregroundColor(.themeTextSecondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, 8)
+                    .padding(.bottom, 24)
+
+                Divider()
 
                 ForEach(0..<kind.sections.count, id: \.self) { index in
                     let section = kind.sections[index]
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 10) {
                         Text(section.0)
                             .font(.system(size: 16, weight: .bold))
                             .foregroundColor(.themeTextMain)
                         Text(section.1)
                             .font(.system(size: 14))
                             .foregroundColor(.themeTextMain.opacity(0.8))
-                            .lineSpacing(4)
+                            .lineSpacing(7)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    .padding(16)
+                    .padding(.vertical, 18)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.white)
-                    .cornerRadius(14)
+                    if index < kind.sections.count - 1 {
+                        Divider()
+                    }
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 12)
+            .padding(.horizontal, 24)
             .padding(.bottom, 40)
         }
-        .background(Color.themeBackground.edgesIgnoringSafeArea(.all))
+        .background(Color.white.edgesIgnoringSafeArea(.all))
         .navigationTitle(kind.title)
         .navigationBarTitleDisplayMode(.inline)
     }

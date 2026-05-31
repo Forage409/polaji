@@ -30,7 +30,7 @@ struct PublishWorkView: View {
                     Image(uiImage: image)
                         .resizable()
                         .scaledToFit()
-                        .frame(height: 250)
+                        .frame(height: 210)
                         .cornerRadius(12)
                         .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
                     
@@ -66,6 +66,10 @@ struct PublishWorkView: View {
                         .padding()
                         .background(Color.white)
                         .cornerRadius(12)
+                    Text("匿名仅作用于本次发布到玩家广场的结果图，不会匿名发布玩法，也不会修改个人资料。")
+                        .font(.system(size: 12))
+                        .foregroundColor(.themeTextSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding()
             }

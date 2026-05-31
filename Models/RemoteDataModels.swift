@@ -1,5 +1,16 @@
 import Foundation
 
+enum RemoteImageURL {
+    static func resolve(_ raw: String) -> URL? {
+        let legacyPrefix = "https://r2.zhenghuoju.com/"
+        if raw.hasPrefix(legacyPrefix) {
+            let key = String(raw.dropFirst(legacyPrefix.count))
+            return URL(string: "https://zhenghuo.miaogou.site/api/images/\(key)")
+        }
+        return URL(string: raw)
+    }
+}
+
 struct RemoteTemplate: Codable, Identifiable {
     let id: String
     let title: String
@@ -54,8 +65,8 @@ struct PublishedWorkReceipt: Codable {
 
 struct WorkLikeReceipt: Codable {
     let success: Bool
-    let likeCount: Int
-    let alreadyLiked: Bool
+    let likeCount: Int?
+    let alreadyLiked: Bool?
 }
 
 struct TemplateStats: Codable {

@@ -1,46 +1,44 @@
 import SwiftUI
-import UserNotifications
- 
+
 struct NotificationSettingsView: View {
-    @State private var systemAuthorized = false
-    @State private var systemDenied = false
-    @State private var dailyReminderEnabled = UserDefaults.standard.bool(forKey: "ZhengHuoJu_DailyReminder")
-    @State private var newTemplateEnabled = UserDefaults.standard.object(forKey: "ZhengHuoJu_NewTemplateNotify") as? Bool ?? true
+    @StateObject private var manager = AppNotificationManager.shared
     @State private var showSettingsAlert = false
-    
+
     var body: some View {
         ScrollView {
             VStack(spacing: 14) {
                 statusBanner
-                
+
                 VStack(spacing: 0) {
                     toggleRow(
                         title: "每日整活提醒",
                         subtitle: "每天 20:00 提醒你生成今日人设卡",
-                        binding: $dailyReminderEnabled,
-                        onChange: { handleDailyReminderChange($0) }
+                        binding: Binding(
+                            get: { manager.dailyReminderEnabled },
+                            set: { manager.setDailyReminder($0, onDenied: showDeniedAlert) }
+                        )
                     )
                     Divider().padding(.horizontal, 16)
                     toggleRow(
                         title: "新模板上线提醒",
-                        subtitle: "上新有梗模板时通知你",
-                        binding: $newTemplateEnabled,
-                        onChange: { value in
-                            UserDefaults.standard.set(value, forKey: "ZhengHuoJu_NewTemplateNotify")
-                        }
+                        subtitle: "App 启动或返回前台时检查真实上新玩法",
+                        binding: Binding(
+                            get: { manager.newTemplateEnabled },
+                            set: { manager.setNewTemplateReminder($0, onDenied: showDeniedAlert) }
+                        )
                     )
                 }
                 .background(Color.white)
                 .cornerRadius(14)
                 .padding(.horizontal, 16)
-                
-                Text("整活局不会推送任何营销内容。本地通知由系统调度，不依赖任何服务器。")
+
+                Text("每日提醒由系统本地调度。新模板提醒会在 App 启动或返回前台时拉取真实模板列表，发现上新后发送通知。")
                     .font(.system(size: 11))
                     .foregroundColor(.themeTextSecondary)
                     .multilineTextAlignment(.leading)
                     .padding(.horizontal, 24)
                     .padding(.top, 8)
-                
+
                 Spacer(minLength: 40)
             }
             .padding(.top, 12)
@@ -48,26 +46,24 @@ struct NotificationSettingsView: View {
         .background(Color.themeBackground.edgesIgnoringSafeArea(.all))
         .navigationTitle("通知设置")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear(perform: refreshAuthorization)
+        .onAppear(perform: manager.refresh)
         .alert(isPresented: $showSettingsAlert) {
             Alert(
                 title: Text("通知权限未开启"),
                 message: Text("请前往系统设置开启「整活局」通知权限后再试。"),
                 primaryButton: .default(Text("去设置"), action: openSystemSettings),
-                secondaryButton: .cancel(Text("取消"), action: {
-                    dailyReminderEnabled = false
-                })
+                secondaryButton: .cancel(Text("取消"))
             )
         }
     }
-    
+
     private var statusBanner: some View {
         HStack(spacing: 12) {
             ZStack {
                 Circle()
                     .fill(statusColor.opacity(0.18))
                     .frame(width: 44, height: 44)
-                Image(systemName: systemAuthorized ? "bell.fill" : (systemDenied ? "bell.slash.fill" : "bell"))
+                Image(systemName: manager.systemAuthorized ? "bell.fill" : (manager.systemDenied ? "bell.slash.fill" : "bell"))
                     .font(.system(size: 18, weight: .bold))
                     .foregroundColor(statusColor)
             }
@@ -78,20 +74,16 @@ struct NotificationSettingsView: View {
                 Text(statusSubtitle)
                     .font(.system(size: 12))
                     .foregroundColor(.themeTextSecondary)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer()
-            if systemDenied {
-                Button(action: openSystemSettings) {
-                    Text("去设置")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(.themeTextMain)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(Color.themePrimary)
-                        .cornerRadius(12)
-                }
+            if manager.systemDenied {
+                Button("去设置", action: openSystemSettings)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(.themeTextMain)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.themePrimary)
+                    .cornerRadius(12)
             }
         }
         .padding(16)
@@ -99,27 +91,25 @@ struct NotificationSettingsView: View {
         .cornerRadius(14)
         .padding(.horizontal, 16)
     }
-    
+
     private var statusColor: Color {
-        if systemAuthorized { return Color.themeSuccessGreen }
-        if systemDenied { return Color.themeWarningPink }
-        return Color.themeTextSecondary
+        if manager.systemAuthorized { return .themeSuccessGreen }
+        if manager.systemDenied { return .themeWarningPink }
+        return .themeTextSecondary
     }
-    
+
     private var statusTitle: String {
-        if systemAuthorized { return "通知权限已开启" }
-        if systemDenied { return "通知权限已被拒绝" }
+        if manager.systemAuthorized { return "通知权限已开启" }
+        if manager.systemDenied { return "通知权限已被拒绝" }
         return "尚未请求通知权限"
     }
-    
+
     private var statusSubtitle: String {
-        if systemAuthorized { return "你可以在下面分别设置不同类型的提醒。" }
-        if systemDenied { return "前往系统设置开启通知权限，才能收到整活提醒。" }
-        return "开启下方任一开关时会请求系统通知授权。"
+        manager.systemAuthorized ? "你可以分别控制两类提醒。" : "开启任一提醒时会请求系统通知授权。"
     }
-    
-    private func toggleRow(title: String, subtitle: String, binding: Binding<Bool>, onChange: @escaping (Bool) -> Void) -> some View {
-        HStack(alignment: .center) {
+
+    private func toggleRow(title: String, subtitle: String, binding: Binding<Bool>) -> some View {
+        HStack {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.system(size: 15, weight: .medium))
@@ -131,63 +121,16 @@ struct NotificationSettingsView: View {
             Spacer()
             Toggle("", isOn: binding)
                 .labelsHidden()
-                .tint(Color.themePrimary)
-                .onChange(of: binding.wrappedValue) { value in
-                    onChange(value)
-                }
+                .tint(.themePrimary)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
     }
-    
-    private func handleDailyReminderChange(_ enabled: Bool) {
-        UserDefaults.standard.set(enabled, forKey: "ZhengHuoJu_DailyReminder")
-        if enabled {
-            UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in
-                DispatchQueue.main.async {
-                    if granted {
-                        scheduleDailyReminder()
-                        refreshAuthorization()
-                    } else {
-                        dailyReminderEnabled = false
-                        UserDefaults.standard.set(false, forKey: "ZhengHuoJu_DailyReminder")
-                        refreshAuthorization()
-                        showSettingsAlert = true
-                    }
-                }
-            }
-        } else {
-            cancelDailyReminder()
-        }
+
+    private func showDeniedAlert() {
+        showSettingsAlert = true
     }
-    
-    private func refreshAuthorization() {
-        UNUserNotificationCenter.current().getNotificationSettings { settings in
-            DispatchQueue.main.async {
-                systemAuthorized = settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional
-                systemDenied = settings.authorizationStatus == .denied
-            }
-        }
-    }
-    
-    private func scheduleDailyReminder() {
-        let content = UNMutableNotificationContent()
-        content.title = "整活局"
-        content.body = "今天还没整活？快来生成你今天的专属人设卡 🎉"
-        content.sound = .default
-        
-        var date = DateComponents()
-        date.hour = 20
-        date.minute = 0
-        let trigger = UNCalendarNotificationTrigger(dateMatching: date, repeats: true)
-        let request = UNNotificationRequest(identifier: "ZhengHuoJu_DailyReminder", content: content, trigger: trigger)
-        UNUserNotificationCenter.current().add(request)
-    }
-    
-    private func cancelDailyReminder() {
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["ZhengHuoJu_DailyReminder"])
-    }
-    
+
     private func openSystemSettings() {
         if let url = URL(string: UIApplication.openSettingsURLString) {
             UIApplication.shared.open(url)

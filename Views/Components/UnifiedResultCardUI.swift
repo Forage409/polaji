@@ -4,12 +4,14 @@ struct UnifiedResultCardUI: View {
     let document: ResultCardDocument
     var showWatermark: Bool = false
     var exportMode: Bool = false
+    var cardWidth: CGFloat = 312
 
     private var pack: ResultThemePack { document.themePack }
 
     var body: some View {
         ZStack {
             backgroundLayer
+            ornamentLayer
             decorationLayer
 
             VStack(alignment: .leading, spacing: 14) {
@@ -20,15 +22,40 @@ struct UnifiedResultCardUI: View {
                     }
                 }
             }
+            .frame(width: cardWidth - 40, alignment: .leading)
             .padding(20)
         }
-        .frame(width: 350)
+        .frame(width: cardWidth)
         .overlay(
             RoundedRectangle(cornerRadius: exportMode ? 0 : 24)
                 .stroke(borderColor, lineWidth: document.layout == .verdict ? 3 : 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: exportMode ? 0 : 24))
         .shadow(color: exportMode ? .clear : .black.opacity(0.14), radius: 18, x: 0, y: 8)
+    }
+
+    private var ornamentLayer: some View {
+        ZStack {
+            Circle()
+                .stroke(pack.accentColor.opacity(0.14), lineWidth: 1)
+                .frame(width: 108, height: 108)
+                .position(x: 20, y: 92)
+            Circle()
+                .fill(pack.accentColor.opacity(0.10))
+                .frame(width: 72, height: 72)
+                .position(x: cardWidth - 8, y: 178)
+            Rectangle()
+                .fill(pack.accentColor.opacity(0.22))
+                .frame(width: 72, height: 2)
+                .rotationEffect(.degrees(-10))
+                .position(x: 62, y: 196)
+            Rectangle()
+                .fill(pack.accentColor.opacity(0.15))
+                .frame(width: 48, height: 2)
+                .rotationEffect(.degrees(-10))
+                .position(x: 54, y: 205)
+        }
+        .allowsHitTesting(false)
     }
 
     @ViewBuilder
@@ -45,6 +72,7 @@ struct UnifiedResultCardUI: View {
                 endPoint: .bottomTrailing
             )
         }
+        .frame(width: cardWidth)
         .clipped()
     }
 
@@ -66,9 +94,9 @@ struct UnifiedResultCardUI: View {
 
     private func decorationPosition(_ index: Int) -> CGPoint {
         switch index {
-        case 0: return CGPoint(x: 308, y: 44)
+        case 0: return CGPoint(x: cardWidth - 42, y: 44)
         case 1: return CGPoint(x: 34, y: 250)
-        default: return CGPoint(x: 306, y: 470)
+        default: return CGPoint(x: cardWidth - 44, y: 470)
         }
     }
 
@@ -124,7 +152,7 @@ struct UnifiedResultCardUI: View {
         }
         .frame(maxWidth: .infinity, alignment: document.layout == .socialPoster ? .center : .leading)
         .multilineTextAlignment(document.layout == .socialPoster ? .center : .leading)
-        .padding(.trailing, 38)
+        .padding(.trailing, document.layout == .socialPoster ? 0 : 38)
     }
 
     @ViewBuilder
@@ -167,6 +195,7 @@ struct UnifiedResultCardUI: View {
         .padding(12)
         .background(panelBackground)
         .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(panelBorder)
     }
 
     private var fields: some View {
@@ -187,6 +216,7 @@ struct UnifiedResultCardUI: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(panelBackground)
         .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(panelBorder)
     }
 
     private var evidence: some View {
@@ -207,6 +237,7 @@ struct UnifiedResultCardUI: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(panelBackground)
         .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(panelBorder)
     }
 
     private var result: some View {
@@ -228,6 +259,7 @@ struct UnifiedResultCardUI: View {
         .frame(maxWidth: .infinity)
         .background(panelBackground.opacity(0.96))
         .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(panelBorder)
     }
 
     private var quote: some View {
@@ -256,7 +288,16 @@ struct UnifiedResultCardUI: View {
     }
 
     private var panelBackground: Color {
-        document.layout == .verdict ? Color.white.opacity(0.82) : Color.white.opacity(0.68)
+        switch document.layout {
+        case .verdict: return Color.white.opacity(0.86)
+        case .socialPoster: return Color.white.opacity(0.76)
+        default: return Color.white.opacity(0.72)
+        }
+    }
+
+    private var panelBorder: some View {
+        RoundedRectangle(cornerRadius: 14)
+            .stroke(pack.accentColor.opacity(0.16), lineWidth: 1)
     }
 
     private var borderColor: Color {
@@ -283,7 +324,7 @@ struct UnifiedResultCardUI: View {
     private var layoutBadge: some View {
         HStack {
             Text(layoutBadgeText)
-                .font(.system(size: 10, weight: .heavy))
+                .font(.system(size: 10, weight: .bold))
                 .foregroundColor(pack.textColor)
                 .padding(.horizontal, 9)
                 .padding(.vertical, 4)
@@ -299,11 +340,11 @@ struct UnifiedResultCardUI: View {
 
     private var layoutBadgeText: String {
         switch document.layout {
-        case .report: return "PERSONAL REPORT"
-        case .ranking: return "FRIEND RANKING"
-        case .verdict: return "GROUP VERDICT"
-        case .challenge: return "TODAY CHALLENGE"
-        case .socialPoster: return "SOCIAL POSTER"
+        case .report: return "人设报告"
+        case .ranking: return "好友榜单"
+        case .verdict: return "群聊判决"
+        case .challenge: return "今日挑战"
+        case .socialPoster: return "社交海报"
         }
     }
 }

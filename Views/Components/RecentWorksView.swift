@@ -59,6 +59,8 @@ struct RecentWorksView: View {
                                             Image(uiImage: uiImage)
                                                 .resizable()
                                                 .scaledToFill()
+                                                .frame(width: 120, height: 120)
+                                                .clipped()
                                         } else {
                                             Image(systemName: "photo")
                                                 .resizable()

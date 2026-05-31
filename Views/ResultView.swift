@@ -203,7 +203,8 @@ struct ResultView: View {
         let view = UnifiedResultCardUI(
             document: document,
             showWatermark: !VipManager.shared.isVip,
-            exportMode: true
+            exportMode: true,
+            cardWidth: 350
         )
         return ImageExportManager.shared.renderImage(from: view, width: 350)
     }

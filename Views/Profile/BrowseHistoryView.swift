@@ -81,7 +81,7 @@ struct BrowseHistoryView: View {
     @ViewBuilder
     private func historyCover(_ raw: String) -> some View {
         if raw.hasPrefix("http://") || raw.hasPrefix("https://") {
-            CachedAsyncImage(url: URL(string: raw)) { image in
+            CachedAsyncImage(url: RemoteImageURL.resolve(raw)) { image in
                 image.resizable().scaledToFill()
             } placeholder: {
                 Color.gray.opacity(0.12)

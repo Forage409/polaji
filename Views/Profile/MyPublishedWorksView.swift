@@ -32,12 +32,12 @@ struct MyPublishedWorksView: View {
                 List {
                     ForEach(works) { work in
                         HStack(spacing: 12) {
-                            CachedAsyncImage(url: URL(string: work.imageUrl)) { image in
+                            CachedAsyncImage(url: RemoteImageURL.resolve(work.imageUrl)) { image in
                                 image.resizable().scaledToFill()
                             } placeholder: {
                                 Color.gray.opacity(0.12)
                             }
-                            .frame(width: 68, height: 86)
+                            .frame(width: 64, height: 80)
                             .clipShape(RoundedRectangle(cornerRadius: 10))
 
                             VStack(alignment: .leading, spacing: 5) {
