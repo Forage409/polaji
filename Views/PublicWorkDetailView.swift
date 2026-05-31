@@ -5,31 +5,30 @@ struct PublicWorkDetailView: View {
     @State private var showingAlert = false
     @State private var alertMessage = ""
 
+    @StateObject private var likeStore = LikedWorksStore.shared
+    @State private var likeCount: Int
+    @State private var heartScale: CGFloat = 1.0
+    @State private var heartFlyOpacity: Double = 0
+    @State private var heartFlyOffset: CGFloat = 0
+    @State private var isProcessingLike = false
+
+    init(work: PublicWork) {
+        self.work = work
+        _likeCount = State(initialValue: work.likeCount)
+    }
+
+    private var isLiked: Bool { likeStore.isLiked(work.id) }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                AsyncImage(url: URL(string: work.imageUrl)) { phase in
-                    switch phase {
-                    case .empty:
-                        Rectangle()
-                            .fill(Color.gray.opacity(0.15))
-                            .aspectRatio(3/4, contentMode: .fit)
-                            .overlay(ProgressView())
-                    case .success(let image):
-                        image.resizable().scaledToFit()
-                    case .failure:
-                        Rectangle()
-                            .fill(Color.gray.opacity(0.15))
-                            .aspectRatio(3/4, contentMode: .fit)
-                            .overlay(
-                                VStack(spacing: 6) {
-                                    Image(systemName: "exclamationmark.triangle")
-                                    Text("图片加载失败").font(.system(size: 12))
-                                }.foregroundColor(.gray)
-                            )
-                    @unknown default:
-                        EmptyView()
-                    }
+                CachedAsyncImage(url: URL(string: work.imageUrl)) { image in
+                    image.resizable().scaledToFit()
+                } placeholder: {
+                    Rectangle()
+                        .fill(Color.gray.opacity(0.15))
+                        .aspectRatio(3/4, contentMode: .fit)
+                        .overlay(ProgressView())
                 }
                 .cornerRadius(16)
                 .padding(.horizontal, 16)
@@ -80,18 +79,7 @@ struct PublicWorkDetailView: View {
                 .padding(.horizontal, 16)
 
                 HStack(spacing: 12) {
-                    Button(action: { likeAction() }) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "heart")
-                            Text("\(work.likeCount)")
-                        }
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(.themeTextMain)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 44)
-                        .background(Color.themePrimary.opacity(0.15))
-                        .cornerRadius(22)
-                    }
+                    likeButton
 
                     Button(action: { saveImage() }) {
                         HStack(spacing: 6) {
@@ -117,13 +105,63 @@ struct PublicWorkDetailView: View {
         .toast(isPresented: $showingAlert, message: alertMessage)
     }
 
-    private func likeAction() {
+    private var likeButton: some View {
+        Button(action: { tapLike() }) {
+            HStack(spacing: 6) {
+                ZStack {
+                    Image(systemName: isLiked ? "heart.fill" : "heart")
+                        .foregroundColor(isLiked ? .red : .themeTextMain)
+                        .scaleEffect(heartScale)
+
+                    Image(systemName: "heart.fill")
+                        .foregroundColor(.red)
+                        .opacity(heartFlyOpacity)
+                        .offset(y: heartFlyOffset)
+                        .scaleEffect(1.2)
+                        .allowsHitTesting(false)
+                }
+                Text("\(likeCount)")
+            }
+            .font(.system(size: 14, weight: .bold))
+            .foregroundColor(.themeTextMain)
+            .frame(maxWidth: .infinity)
+            .frame(height: 44)
+            .background(isLiked ? Color.red.opacity(0.12) : Color.themePrimary.opacity(0.15))
+            .cornerRadius(22)
+        }
+        .disabled(isProcessingLike || isLiked)
+    }
+
+    private func tapLike() {
+        guard !isLiked, !isProcessingLike else { return }
+
+        // Optimistic UI: animate + bump count + persist locally first
+        isProcessingLike = true
+        likeStore.mark(work.id)
+        likeCount += 1
+
+        withAnimation(.spring(response: 0.25, dampingFraction: 0.45)) {
+            heartScale = 1.5
+        }
+        withAnimation(.easeOut(duration: 0.6)) {
+            heartFlyOpacity = 1.0
+            heartFlyOffset = -40
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                heartScale = 1.0
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+            heartFlyOpacity = 0
+            heartFlyOffset = 0
+        }
+
+        // Fire-and-forget server side (server has no auth-bound dedup, so we
+        // ignore failure - the local set already prevents the repeat tap).
         Task {
             _ = try? await PublicWorksService.shared.likeWork(id: work.id)
-            await MainActor.run {
-                alertMessage = "已点赞"
-                showingAlert = true
-            }
+            await MainActor.run { isProcessingLike = false }
         }
     }
 

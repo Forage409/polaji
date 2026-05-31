@@ -20,6 +20,7 @@ struct GenerateFormView: View {
     @State private var dynamicTextValues: [String: String] = [:]
     @State private var dynamicSingleValues: [String: String] = [:]
     @State private var dynamicMultiValues: [String: Set<String>] = [:]
+    @State private var dynamicParticipants: [String: [String]] = [:]
 
     @State private var showAlert = false
     @State private var alertMessage = ""
@@ -73,7 +74,7 @@ struct GenerateFormView: View {
             for f in template.customFields ?? [] {
                 guard !f.label.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
                 switch f.type {
-                case .text:
+                case .text, .number:
                     if (dynamicTextValues[f.id] ?? "").trimmingCharacters(in: .whitespaces).isEmpty {
                         alertMessage = "请填写「\(f.label)」"
                         showAlert = true
@@ -88,6 +89,14 @@ struct GenerateFormView: View {
                 case .multiSelect:
                     if (dynamicMultiValues[f.id] ?? []).isEmpty {
                         alertMessage = "请至少为「\(f.label)」选一项"
+                        showAlert = true
+                        return
+                    }
+                case .participants:
+                    let names = (dynamicParticipants[f.id] ?? []).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+                    let minC = f.minCount ?? 3
+                    if names.count < minC {
+                        alertMessage = "「\(f.label)」至少需要 \(minC) 人"
                         showAlert = true
                         return
                     }
@@ -110,13 +119,16 @@ struct GenerateFormView: View {
             for f in template.customFields ?? [] {
                 let key = f.label
                 switch f.type {
-                case .text:
+                case .text, .number:
                     result[key] = dynamicTextValues[f.id] ?? ""
                 case .singleSelect:
                     result[key] = dynamicSingleValues[f.id] ?? ""
                 case .multiSelect:
                     let picked = dynamicMultiValues[f.id] ?? []
                     result[key] = picked.joined(separator: "、")
+                case .participants:
+                    let names = (dynamicParticipants[f.id] ?? []).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+                    result[key] = names.joined(separator: "、")
                 }
             }
             return result
@@ -179,6 +191,14 @@ struct GenerateFormView: View {
                         text: dynamicTextBinding(for: field.id)
                     )
                 }
+            case .number:
+                inputGroup(title: field.label) {
+                    TextField(
+                        field.placeholder.isEmpty ? "请输入数字" : field.placeholder,
+                        text: dynamicTextBinding(for: field.id)
+                    )
+                    .keyboardType(.numberPad)
+                }
             case .singleSelect:
                 singleSelectGroup(
                     title: field.label,
@@ -191,10 +211,74 @@ struct GenerateFormView: View {
                     options: field.options,
                     fieldId: field.id
                 )
+            case .participants:
+                dynamicParticipantsGroup(field: field)
             }
         }
+    }
 
-        // 不再显示 VIP 自定义文案：用户自定义模板时不需要这个干扰
+    @ViewBuilder
+    private func dynamicParticipantsGroup(field: TemplateField) -> some View {
+        let minC = field.minCount ?? 3
+        let maxC = field.maxCount ?? 8
+        let currentList: [String] = dynamicParticipants[field.id] ?? Array(repeating: "", count: minC)
+
+        VStack(alignment: .leading, spacing: 12) {
+            Text("\(field.label)（最少 \(minC) 人，最多 \(maxC) 人）")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(.themeTextMain)
+
+            ForEach(currentList.indices, id: \.self) { index in
+                HStack {
+                    TextField("第 \(index + 1) 个名字", text: Binding(
+                        get: { (dynamicParticipants[field.id]?[safe: index]) ?? "" },
+                        set: { newVal in
+                            var list = dynamicParticipants[field.id] ?? Array(repeating: "", count: minC)
+                            while list.count <= index { list.append("") }
+                            list[index] = newVal
+                            dynamicParticipants[field.id] = list
+                        }
+                    ))
+                    .padding()
+                    .background(Color.white)
+                    .cornerRadius(12)
+                    .shadow(color: .black.opacity(0.05), radius: 5, y: 2)
+
+                    if currentList.count > minC {
+                        Button(action: {
+                            var list = dynamicParticipants[field.id] ?? []
+                            if index < list.count {
+                                list.remove(at: index)
+                                dynamicParticipants[field.id] = list
+                            }
+                        }) {
+                            Image(systemName: "minus.circle.fill").foregroundColor(.red)
+                        }
+                    }
+                }
+            }
+
+            if currentList.count < maxC {
+                Button(action: {
+                    var list = dynamicParticipants[field.id] ?? Array(repeating: "", count: minC)
+                    list.append("")
+                    dynamicParticipants[field.id] = list
+                }) {
+                    HStack {
+                        Image(systemName: "plus")
+                        Text("添加参与人")
+                    }
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.themePrimary)
+                    .padding(.vertical, 8)
+                }
+            }
+        }
+        .onAppear {
+            if dynamicParticipants[field.id] == nil {
+                dynamicParticipants[field.id] = Array(repeating: "", count: minC)
+            }
+        }
     }
 
     private func dynamicTextBinding(for id: String) -> Binding<String> {
@@ -451,6 +535,13 @@ struct GenerateFormView: View {
                 }
             }
         }
+    }
+}
+
+// Safe subscript for arrays - returns nil instead of crashing on out-of-range index.
+extension Array {
+    subscript(safe index: Int) -> Element? {
+        return indices.contains(index) ? self[index] : nil
     }
 }
 

@@ -106,7 +106,10 @@ struct EditorPreviewPublishView: View {
         let capturedTitle = self.draft.title
         let capturedDescription = self.draft.description
         let capturedCategory = self.draft.category
-        let formConfigJSON = TemplateFormConfig(fields: self.draft.fields).toJSONString()
+        let formConfigJSON = TemplateFormConfig(
+            fields: self.draft.fields,
+            cardStyle: self.draft.cardStyle
+        ).toJSONString()
         let dismissAction = self.dismiss
 
         Task {

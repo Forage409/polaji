@@ -12,6 +12,8 @@ struct Template: Identifiable {
     let fields: [String]
     /// 用户自定义模板的字段清单。系统内置模板这里为 nil。
     var customFields: [TemplateField]? = nil
+    /// 用户自定义模板的卡片样式（背景、圆角、装饰）。
+    var cardStyle: TemplateCardStyle = TemplateCardStyle()
 }
 
 extension Template {
@@ -27,5 +29,6 @@ extension Template {
         self.fields = []
         let cfg = TemplateFormConfig.parse(remote.formConfigRaw)
         self.customFields = cfg.fields.isEmpty ? nil : cfg.fields
+        self.cardStyle = cfg.cardStyle
     }
 }

@@ -35,7 +35,8 @@ struct ResultView: View {
                         CustomResultCardUI(
                             templateName: template.name,
                             authorName: UserProfileStore.shared.nickname,
-                            fields: customFieldEntries
+                            fields: customFieldEntries,
+                            style: template.cardStyle
                         )
                         .padding(.vertical, 30)
                     } else if let card = generatedCard {
@@ -154,6 +155,7 @@ struct ResultView: View {
                 templateName: template.name,
                 authorName: UserProfileStore.shared.nickname,
                 fields: customFieldEntries,
+                style: template.cardStyle,
                 showWatermark: !isVip
             )
             return ImageExportManager.shared.renderImage(from: view, width: 350)
