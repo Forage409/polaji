@@ -160,7 +160,7 @@ struct TemplateWaterfallCard: View {
     private var coverImageView: some View {
         let raw = template.coverImage
         if raw.hasPrefix("http://") || raw.hasPrefix("https://") {
-            AsyncImage(url: URL(string: raw)) { image in
+            CachedAsyncImage(url: URL(string: raw)) { image in
                 image.resizable().scaledToFill()
             } placeholder: {
                 Rectangle()
@@ -206,7 +206,10 @@ struct WorksFeedWaterfallView: View {
             } else {
                 LazyVGrid(columns: columns, spacing: 16) {
                     ForEach(works) { work in
-                        workFeedCard(work)
+                        NavigationLink(destination: PublicWorkDetailView(work: work)) {
+                            workFeedCard(work)
+                        }
+                        .buttonStyle(PlainButtonStyle())
                     }
                 }
                 .padding(.horizontal, 16)
@@ -232,7 +235,7 @@ struct WorksFeedWaterfallView: View {
     @ViewBuilder
     private func workFeedCard(_ work: PublicWork) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            AsyncImage(url: URL(string: work.imageUrl)) { image in
+            CachedAsyncImage(url: URL(string: work.imageUrl)) { image in
                 image
                     .resizable()
                     .scaledToFit()
