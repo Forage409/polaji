@@ -10,6 +10,8 @@ struct Template: Identifiable {
     var usageCount: Int
     let tags: [String]
     let fields: [String]
+    /// 用户自定义模板的字段清单。系统内置模板这里为 nil。
+    var customFields: [TemplateField]? = nil
 }
 
 extension Template {
@@ -23,5 +25,7 @@ extension Template {
         self.usageCount = remote.usageCount
         self.tags = []
         self.fields = []
+        let cfg = TemplateFormConfig.parse(remote.formConfigRaw)
+        self.customFields = cfg.fields.isEmpty ? nil : cfg.fields
     }
 }

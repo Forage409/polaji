@@ -83,37 +83,37 @@ struct EditorPreviewPublishView: View {
             showAlert = true
             return
         }
-        if draft.formFields.isEmpty {
-            alertMsg = "请至少添加一个表单字段"
+        if draft.fields.isEmpty {
+            alertMsg = "请至少添加一个填写项"
             showAlert = true
             return
         }
-        if draft.resultRule.titleTemplate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            alertMsg = "请填写生成结果的标题模板"
+        if draft.fields.contains(where: { $0.label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
+            alertMsg = "每个填写项都需要起一个名字"
             showAlert = true
             return
         }
-        
+
         isPublishing = true
-        
-        // Convert image to data
+
         guard let imageData = draft.coverImage?.jpegData(compressionQuality: 0.8) else {
             alertMsg = "封面处理失败"
             showAlert = true
             isPublishing = false
             return
         }
-        
+
         let capturedTitle = self.draft.title
         let capturedDescription = self.draft.description
         let capturedCategory = self.draft.category
+        let formConfigJSON = TemplateFormConfig(fields: self.draft.fields).toJSONString()
         let dismissAction = self.dismiss
-        
+
         Task {
             do {
                 let coverUrl = try await RemoteTemplateService.shared.uploadCover(imageData: imageData)
                 let finalCoverUrl = coverUrl
-                
+
                 let draftTemplate = RemoteTemplate(
                     id: UUID().uuidString,
                     title: capturedTitle,
@@ -132,19 +132,18 @@ struct EditorPreviewPublishView: View {
                     status: "published",
                     createdAt: "",
                     updatedAt: "",
-                    formConfigRaw: nil,
+                    formConfigRaw: formConfigJSON,
                     resultConfigRaw: nil
                 )
-                
+
                 let success = try await RemoteTemplateService.shared.createTemplate(draft: draftTemplate)
-                
+
                 await MainActor.run {
                     self.isPublishing = false
                     if success {
                         self.alertMsg = "发布成功！"
                         self.showAlert = true
                         NotificationCenter.default.post(name: NSNotification.Name("RefreshFeed"), object: nil)
-                        // Trigger dismiss directly in MainActor, instead of DispatchQueue.main.asyncAfter which captures stale environment
                         dismissAction()
                     } else {
                         self.alertMsg = "发布失败，请检查网络"

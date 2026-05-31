@@ -4,12 +4,14 @@ struct TemplateEditorView: View {
     @StateObject private var draft = TemplateDraft()
     @State private var currentStep: Int = 1
     @Environment(\.presentationMode) var presentationMode
-    
+
+    private let totalSteps: Int = 4
+
     var body: some View {
         VStack(spacing: 0) {
             headerBar
             progressBar
-            
+
             TabView(selection: $currentStep) {
                 EditorBasicInfoView(draft: draft)
                     .tag(1)
@@ -17,20 +19,18 @@ struct TemplateEditorView: View {
                     .tag(2)
                 EditorFormRulesView(draft: draft)
                     .tag(3)
-                EditorResultRulesView(draft: draft)
-                    .tag(4)
                 EditorPreviewPublishView(draft: draft)
-                    .tag(5)
+                    .tag(4)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             .animation(.easeInOut, value: currentStep)
-            
+
             bottomBar
         }
         .background(Color.themeBackground.edgesIgnoringSafeArea(.all))
         .navigationBarHidden(true)
     }
-    
+
     private var headerBar: some View {
         HStack {
             Button(action: {
@@ -58,7 +58,7 @@ struct TemplateEditorView: View {
         .padding()
         .background(Color.white)
     }
-    
+
     private var progressBar: some View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
@@ -67,13 +67,13 @@ struct TemplateEditorView: View {
                     .frame(height: 4)
                 Rectangle()
                     .fill(Color.themePrimary)
-                    .frame(width: geo.size.width * CGFloat(currentStep) / 5.0, height: 4)
+                    .frame(width: geo.size.width * CGFloat(currentStep) / CGFloat(totalSteps), height: 4)
                     .animation(.linear, value: currentStep)
             }
         }
         .frame(height: 4)
     }
-    
+
     private var bottomBar: some View {
         HStack {
             if currentStep > 1 {
@@ -87,8 +87,8 @@ struct TemplateEditorView: View {
                         .cornerRadius(25)
                 }
             }
-            
-            if currentStep < 5 {
+
+            if currentStep < totalSteps {
                 Button(action: { currentStep += 1 }) {
                     Text("下一步")
                         .font(.system(size: 16, weight: .bold))
@@ -99,20 +99,19 @@ struct TemplateEditorView: View {
                         .cornerRadius(25)
                 }
             } else {
-                Spacer() // Only show '上一步' when at step 5, '发布' is in the view itself
+                Spacer()
             }
         }
         .padding()
         .background(Color.white)
     }
-    
+
     private var stepTitle: String {
         switch currentStep {
         case 1: return "基础信息"
         case 2: return "封面图片"
-        case 3: return "填写规则"
-        case 4: return "结果规则"
-        case 5: return "预览与发布"
+        case 3: return "填写项"
+        case 4: return "预览与发布"
         default: return "编辑玩法"
         }
     }

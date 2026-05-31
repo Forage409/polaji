@@ -3,25 +3,42 @@ import SwiftUI
 struct ResultView: View {
     let template: Template
     let initialInputs: [String: String]
-    
+
     @State private var currentInputs: [String: String] = [:]
     @State private var generatedCard: GeneratedCard?
     @Environment(\.presentationMode) var presentationMode
     @State private var showingAlert = false
     @State private var alertMessage = ""
     @State private var showingPublishSheet = false
-    
+
+    private var isCustom: Bool { (template.customFields?.isEmpty == false) }
+
+    /// 自定义模板下，按字段定义顺序还原 [(label, value)]。
+    private var customFieldEntries: [(label: String, value: String)] {
+        guard let fields = template.customFields else { return [] }
+        return fields.map { f in
+            (label: f.label, value: currentInputs[f.label] ?? "")
+        }
+    }
+
     init(template: Template, inputs: [String: String]) {
         self.template = template
         self.initialInputs = inputs
         _currentInputs = State(initialValue: inputs)
     }
-    
+
     var body: some View {
         VStack {
             ScrollView {
                 VStack {
-                    if let card = generatedCard {
+                    if isCustom {
+                        CustomResultCardUI(
+                            templateName: template.name,
+                            authorName: UserProfileStore.shared.nickname,
+                            fields: customFieldEntries
+                        )
+                        .padding(.vertical, 30)
+                    } else if let card = generatedCard {
                         ResultCardUI(card: card)
                             .padding(.vertical, 30)
                     } else {
@@ -31,10 +48,8 @@ struct ResultView: View {
                 }
                 .frame(maxWidth: .infinity)
             }
-            
+
             VStack(spacing: 12) {
-                // Reroll and Change Tone removed per P0.6 requirements
-                
                 HStack(spacing: 12) {
                     Button(action: {
                         saveImageAndWork()
@@ -47,7 +62,7 @@ struct ResultView: View {
                             .background(Color.themePrimary)
                             .cornerRadius(25)
                     }
-                    
+
                     Button(action: {
                         shareImage()
                     }) {
@@ -60,7 +75,7 @@ struct ResultView: View {
                             .cornerRadius(25)
                     }
                 }
-                
+
                 Button(action: {
                     showingPublishSheet = true
                 }) {
@@ -72,7 +87,7 @@ struct ResultView: View {
                         .background(Color.themePrimary.opacity(0.1))
                         .cornerRadius(25)
                 }
-                
+
                 Button(action: {
                     presentationMode.wrappedValue.dismiss()
                 }) {
@@ -89,18 +104,18 @@ struct ResultView: View {
         .navigationTitle("生成结果")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
-            if generatedCard == nil {
+            if !isCustom && generatedCard == nil {
                 generateCard()
             }
         }
         .toast(isPresented: $showingAlert, message: alertMessage)
         .sheet(isPresented: $showingPublishSheet) {
-            if let card = generatedCard, let img = getRenderedImage() {
-                PublishWorkView(template: template, card: card, image: img)
+            if let img = getRenderedImage() {
+                PublishWorkView(template: template, card: makeCardForPublishing(), image: img)
             }
         }
     }
-    
+
     private func generateCard() {
         generatedCard = CardGenerator.shared.generate(templateId: template.id, inputs: currentInputs)
         if generatedCard != nil {
@@ -109,31 +124,54 @@ struct ResultView: View {
             }
         }
     }
-    
-    private func changeTone() {
-        let tones = ["正经鉴定", "群聊整活", "毒舌吐槽", "可爱夸夸", "扎心", "搞笑", "离谱判决"]
-        var newTone = tones.randomElement()!
-        while newTone == currentInputs["tone"] {
-            newTone = tones.randomElement()!
-        }
-        currentInputs["tone"] = newTone
-        generateCard()
+
+    /// PublishWorkView 当前需要一个 GeneratedCard。给自定义模板伪造一个最小化的
+    /// GeneratedCard，仅用于传 title/templateId，不影响图片本身（图片已经独立 render）。
+    private func makeCardForPublishing() -> GeneratedCard {
+        if let card = generatedCard { return card }
+        return GeneratedCard(
+            id: UUID().uuidString,
+            templateId: template.id,
+            title: template.name,
+            subtitle: "",
+            mainImageName: "",
+            stats: [],
+            quote: "",
+            evidenceList: [],
+            resultLevel: "",
+            finalComment: "",
+            styleTone: "",
+            participants: [],
+            templateType: "custom",
+            createdAt: ISO8601DateFormatter().string(from: Date())
+        )
     }
-    
+
     private func getRenderedImage() -> UIImage? {
-        guard let card = generatedCard else { return nil }
         let isVip = VipManager.shared.isVip
-        let uiView = ResultCardUI(card: card, exportMode: true, showWatermark: !isVip)
-        return ImageExportManager.shared.renderImage(from: uiView, width: 350)
+        if isCustom {
+            let view = CustomResultCardUI(
+                templateName: template.name,
+                authorName: UserProfileStore.shared.nickname,
+                fields: customFieldEntries,
+                showWatermark: !isVip
+            )
+            return ImageExportManager.shared.renderImage(from: view, width: 350)
+        } else {
+            guard let card = generatedCard else { return nil }
+            let uiView = ResultCardUI(card: card, exportMode: true, showWatermark: !isVip)
+            return ImageExportManager.shared.renderImage(from: uiView, width: 350)
+        }
     }
-    
+
     private func saveImageAndWork() {
-        guard let image = getRenderedImage(), let card = generatedCard else { return }
-        
+        guard let image = getRenderedImage() else { return }
+        let cardForSave = makeCardForPublishing()
+
         ImageExportManager.shared.saveImageToPhotos(image) { success in
             if success {
-                if let savedPath = ImageExportManager.shared.saveImageToDocuments(image, fileName: "\(card.id).jpg") {
-                    let work = Work(id: card.id, templateId: template.id, title: card.title, imagePath: savedPath, createdAt: card.createdAt, category: template.category, isShared: false)
+                if let savedPath = ImageExportManager.shared.saveImageToDocuments(image, fileName: "\(cardForSave.id).jpg") {
+                    let work = Work(id: cardForSave.id, templateId: template.id, title: cardForSave.title, imagePath: savedPath, createdAt: cardForSave.createdAt, category: template.category, isShared: false)
                     WorksStore.shared.saveWork(work)
                     alertMessage = "保存成功，已存入相册和我的作品！"
                 } else {
@@ -145,7 +183,7 @@ struct ResultView: View {
             showingAlert = true
         }
     }
-    
+
     private func shareImage() {
         guard let image = getRenderedImage() else { return }
         ImageExportManager.shared.shareImage(image)

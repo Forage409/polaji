@@ -2,40 +2,16 @@ import Foundation
 import UIKit
 import Combine
 
-struct FormFieldDraft: Identifiable {
-    let id = UUID()
-    var type: String // text, textarea, single_select, multi_select, participant_list, number, date
-    var label: String
-    var placeholder: String
-    var isRequired: Bool
-    var options: [String]
-    var minCount: Int?
-    var maxCount: Int?
-}
-
-struct ResultRuleDraft {
-    var type: String // diagnostic, verdict, ranking, task, persona
-    var titleTemplate: String
-    var subtitleTemplate: String
-    var resultLevels: [String]
-    var finalComments: [String]
-}
-
 class TemplateDraft: ObservableObject {
     @Published var title: String = ""
     @Published var description: String = ""
     @Published var category: String = "趣味"
     @Published var tags: [String] = []
-    
+
     @Published var coverImage: UIImage? = nil
-    
-    @Published var formFields: [FormFieldDraft] = []
-    
-    @Published var resultRule: ResultRuleDraft = ResultRuleDraft(
-        type: "diagnostic",
-        titleTemplate: "",
-        subtitleTemplate: "",
-        resultLevels: [],
-        finalComments: []
-    )
+
+    /// 所见即所得字段清单。用户在编辑器里看到/改动什么，就是用户填表时看到/改动什么。
+    @Published var fields: [TemplateField] = [
+        TemplateField(label: "昵称", type: .text, placeholder: "请输入昵称")
+    ]
 }

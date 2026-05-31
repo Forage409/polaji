@@ -292,8 +292,8 @@ export default {
                         safeUserId,
                         s(body.authorName),
                         s(body.status, 'draft'),
-                        s(JSON.stringify(body.formConfig ?? {})),
-                        s(JSON.stringify(body.resultConfig ?? {}))
+                        s(typeof body.formConfigRaw === 'string' ? body.formConfigRaw : JSON.stringify(body.formConfig ?? {})),
+                        s(typeof body.resultConfigRaw === 'string' ? body.resultConfigRaw : JSON.stringify(body.resultConfig ?? {}))
                     ).run();
                     return Response.json({ success: true }, { headers: corsHeaders });
                 } catch (err: any) {
@@ -319,8 +319,8 @@ export default {
                         s(body.description),
                         s(body.coverImage),
                         s(body.category),
-                        s(JSON.stringify(body.formConfig ?? {})),
-                        s(JSON.stringify(body.resultConfig ?? {})),
+                        s(typeof body.formConfigRaw === 'string' ? body.formConfigRaw : JSON.stringify(body.formConfig ?? {})),
+                        s(typeof body.resultConfigRaw === 'string' ? body.resultConfigRaw : JSON.stringify(body.resultConfig ?? {})),
                         id,
                         safeUserId
                     ).run();
