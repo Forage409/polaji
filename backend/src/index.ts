@@ -18,13 +18,13 @@ function n(value: any, fallback: number = 0): number {
 
 // Map a templates row (joined with template_stats) to the frontend RemoteTemplate shape.
 // Frontend uses camelCase and requires stats fields even when none exist yet.
-function mapTemplate(row: any): any {
+function mapTemplate(row: any, origin: string = ''): any {
     if (!row) return null;
     return {
         id: s(row.id),
         title: s(row.title),
         description: s(row.description),
-        coverImage: s(row.cover_image),
+        coverImage: rewriteImageUrl(s(row.cover_image), origin),
         category: s(row.category),
         authorId: s(row.author_id),
         authorName: s(row.author_name),
@@ -43,7 +43,7 @@ function mapTemplate(row: any): any {
     };
 }
 
-function mapWork(row: any): any {
+function mapWork(row: any, origin: string = ''): any {
     if (!row) return null;
     let tags: string[] = [];
     if (row.tags) {
@@ -56,7 +56,7 @@ function mapWork(row: any): any {
         id: s(row.id),
         title: s(row.title),
         description: s(row.description),
-        imageUrl: s(row.image_url),
+        imageUrl: rewriteImageUrl(s(row.image_url), origin),
         authorId: s(row.author_id),
         authorName: s(row.author_name),
         templateId: s(row.template_id),
@@ -67,6 +67,20 @@ function mapWork(row: any): any {
         reportCount: n(row.report_count),
         createdAt: s(row.created_at),
     };
+}
+
+/// Rewrite legacy/dead R2 hostnames to the worker-served proxy path.
+/// Existing rows in DB may carry the old `r2.zhenghuoju.com` prefix from when
+/// uploads pointed to a public R2 domain that never got configured. We map
+/// those URLs to `${origin}/api/images/<key>` on the fly.
+function rewriteImageUrl(raw: string, origin: string): string {
+    if (!raw) return raw;
+    const deadPrefix = "https://r2.zhenghuoju.com/";
+    if (raw.startsWith(deadPrefix) && origin) {
+        const key = raw.slice(deadPrefix.length);
+        return `${origin}/api/images/${key}`;
+    }
+    return raw;
 }
 
 async function hashToken(token: string): Promise<string> {
@@ -139,7 +153,7 @@ export default {
                     FROM templates t LEFT JOIN template_stats ts ON ts.template_id = t.id
                     WHERE t.status = 'published' ORDER BY t.created_at DESC LIMIT 20
                 `).all();
-                return Response.json((results || []).map(mapTemplate), { headers: corsHeaders });
+                return Response.json((results || []).map((r: any) => mapTemplate(r, url.origin)), { headers: corsHeaders });
             }
             if (path === "/api/templates/featured" && method === "GET") {
                 const { results } = await env.DB.prepare(`
@@ -147,7 +161,7 @@ export default {
                     FROM templates t LEFT JOIN template_stats ts ON ts.template_id = t.id
                     WHERE t.status = 'published' LIMIT 5
                 `).all();
-                return Response.json((results || []).map(mapTemplate), { headers: corsHeaders });
+                return Response.json((results || []).map((r: any) => mapTemplate(r, url.origin)), { headers: corsHeaders });
             }
             if (path === "/api/templates/trending" && method === "GET") {
                 const { results } = await env.DB.prepare(`
@@ -155,13 +169,13 @@ export default {
                     FROM templates t LEFT JOIN template_stats ts ON ts.template_id = t.id
                     WHERE t.status = 'published' LIMIT 10
                 `).all();
-                return Response.json((results || []).map(mapTemplate), { headers: corsHeaders });
+                return Response.json((results || []).map((r: any) => mapTemplate(r, url.origin)), { headers: corsHeaders });
             }
 
             // 3. Works Feed
             if (path === "/api/works/feed" && method === "GET") {
                 const { results } = await env.DB.prepare("SELECT * FROM works ORDER BY created_at DESC LIMIT 20").all();
-                return Response.json((results || []).map(mapWork), { headers: corsHeaders });
+                return Response.json((results || []).map((r: any) => mapWork(r, url.origin)), { headers: corsHeaders });
             }
 
             // 4. Template & Work Details (Public)
@@ -173,14 +187,14 @@ export default {
                     WHERE t.id = ?
                 `).bind(s(templateDetailMatch[1])).first();
                 if (!template) return Response.json({ error: "Not found" }, { status: 404, headers: corsHeaders });
-                return Response.json(mapTemplate(template), { headers: corsHeaders });
+                return Response.json(mapTemplate(template, url.origin), { headers: corsHeaders });
             }
 
             const workDetailMatch = path.match(/^\/api\/works\/([^\/]+)$/);
             if (workDetailMatch && method === "GET") {
                 const work = await env.DB.prepare("SELECT * FROM works WHERE id = ?").bind(s(workDetailMatch[1])).first();
                 if (!work) return Response.json({ error: "Not found" }, { status: 404, headers: corsHeaders });
-                return Response.json(mapWork(work), { headers: corsHeaders });
+                return Response.json(mapWork(work, url.origin), { headers: corsHeaders });
             }
 
             // ---- EVENTS (Public / Unauthenticated Tracking) ----
@@ -197,6 +211,22 @@ export default {
                 if (type === "template_share") await env.DB.prepare(`UPDATE template_stats SET share_count = share_count + 1 WHERE template_id = ?`).bind(id).run();
                 if (type === "template_like") await env.DB.prepare(`UPDATE template_stats SET like_count = like_count + 1 WHERE template_id = ?`).bind(id).run();
                 return Response.json({ success: true }, { headers: corsHeaders });
+            }
+
+            // ---- PUBLIC IMAGE PROXY (before auth) ----
+            // Streams an R2 object back to the client. Public; no auth required.
+            const imageMatch = path.match(/^\/api\/images\/(.+)$/);
+            if (imageMatch && (method === "GET" || method === "HEAD")) {
+                const key = decodeURIComponent(imageMatch[1]);
+                const obj = await env.BUCKET.get(key);
+                if (!obj) {
+                    return new Response("Not found", { status: 404, headers: corsHeaders });
+                }
+                const headers = new Headers(corsHeaders);
+                obj.writeHttpMetadata(headers);
+                headers.set("etag", obj.httpEtag);
+                headers.set("cache-control", "public, max-age=31536000, immutable");
+                return new Response(method === "HEAD" ? null : obj.body, { headers });
             }
 
             // ---- REQUIRE AUTHENTICATION ----
@@ -221,7 +251,7 @@ export default {
                     FROM templates t LEFT JOIN template_stats ts ON ts.template_id = t.id
                     WHERE t.author_id = ? ORDER BY t.created_at DESC
                 `).bind(safeUserId).all();
-                return Response.json((results || []).map(mapTemplate), { headers: corsHeaders });
+                return Response.json((results || []).map((r: any) => mapTemplate(r, url.origin)), { headers: corsHeaders });
             }
 
             // Creator Actions on Specific Templates
@@ -440,7 +470,8 @@ export default {
                         httpMetadata: { contentType: contentType }
                     });
 
-                    const publicUrl = `https://r2.zhenghuoju.com/${filename}`;
+                    // Serve through this worker (no separate R2 public domain needed).
+                    const publicUrl = `${url.origin}/api/images/${filename}`;
                     console.log("Image uploaded successfully:", publicUrl);
                     return new Response(publicUrl, { headers: corsHeaders });
                 } catch (err: any) {
