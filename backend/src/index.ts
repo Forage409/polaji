@@ -780,8 +780,16 @@ export default {
                     return Response.json({ challengeId, cooldownSeconds: 60, expiresInSeconds: 300 }, { headers: corsHeaders });
                 } catch (error) {
                     await env.DB.prepare("UPDATE sms_requests SET status = 'failed' WHERE id = ?").bind(challengeId).run();
-                    console.error('SMS send failed', { challengeId, reason: s((error as any)?.message) });
-                    return Response.json({ error: 'SMS service is temporarily unavailable', code: 'SMS_UPSTREAM_FAILED' }, { status: 502, headers: corsHeaders });
+                    const reason = s((error as any)?.message);
+                    const providerCode = reason.startsWith('ALIYUN_SMS_FAILED:')
+                        ? reason.slice('ALIYUN_SMS_FAILED:'.length).replace(/[^A-Za-z0-9_.-]/g, '').slice(0, 80)
+                        : 'UNKNOWN';
+                    console.error('SMS send failed', { challengeId, providerCode });
+                    return Response.json({
+                        error: 'SMS service is temporarily unavailable',
+                        code: 'SMS_UPSTREAM_FAILED',
+                        providerCode,
+                    }, { status: 502, headers: corsHeaders });
                 }
             }
 
