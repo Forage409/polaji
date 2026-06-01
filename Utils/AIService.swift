@@ -52,6 +52,18 @@ struct AITemplateCopyReceipt: Codable {
     }
 }
 
+struct AIGamePackageReceipt: Codable {
+    let description: String
+    let questions: [TemplateField]
+    let outcomes: [TemplateOutcome]
+    let weights: [OptionOutcomeWeight]
+    let quota: AIQuotaStatus
+
+    var package: TemplateOutcomePackage {
+        TemplateOutcomePackage(outcomes: outcomes, weights: weights)
+    }
+}
+
 enum AIServiceError: LocalizedError {
     case quotaExceeded
     case vipRequired
@@ -126,6 +138,32 @@ final class AIService {
         ]
         let body = try JSONSerialization.data(withJSONObject: payload)
         let request = try APIClient.shared.createRequest(path: "/api/ai/generate-template-copy", method: "POST", body: body)
+        return try await perform(request)
+    }
+
+    func generateGamePackage(title: String, description: String, category: String, fields: [TemplateField], tone: AITone) async throws -> AIGamePackageReceipt {
+        let fieldPayload: [[String: Any]] = fields.map { field in
+            [
+                "id": field.id,
+                "label": field.label,
+                "type": field.type.rawValue,
+                "placeholder": field.placeholder,
+                "options": field.options,
+                "minCount": field.minCount ?? 0,
+                "maxCount": field.maxCount ?? 0,
+            ]
+        }
+        let payload: [String: Any] = [
+            "requestId": UUID().uuidString,
+            "templateTitle": title,
+            "templateDescription": description,
+            "category": category,
+            "tone": tone.rawValue,
+            "workflow": "参与者依次回答问题，选择题答案按权重命中一个结果人设，再生成可分享的专属海报。",
+            "fields": fieldPayload,
+        ]
+        let body = try JSONSerialization.data(withJSONObject: payload)
+        let request = try APIClient.shared.createRequest(path: "/api/ai/generate-game-package", method: "POST", body: body)
         return try await perform(request)
     }
 

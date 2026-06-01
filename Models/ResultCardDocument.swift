@@ -77,8 +77,129 @@ struct TemplateCopyLibrary: Codable, Equatable {
     }
 }
 
+struct TemplateOutcomeStat: Codable, Equatable, Identifiable {
+    var id: String = UUID().uuidString
+    var name: String
+    var value: Int
+
+    func normalized() -> TemplateOutcomeStat {
+        TemplateOutcomeStat(
+            id: id,
+            name: String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(12)),
+            value: min(100, max(0, value))
+        )
+    }
+}
+
+struct TemplateOutcome: Codable, Equatable, Identifiable {
+    var id: String = UUID().uuidString
+    var title: String
+    var subtitle: String
+    var resultLevel: String
+    var quote: String
+    var finalComment: String
+    var evidencePool: [String]
+    var stats: [TemplateOutcomeStat]
+    var themePackId: String? = nil
+    var heroStickerId: String? = nil
+
+    func normalized() -> TemplateOutcome {
+        let knownThemeIds = Set(ResultThemePack.all.map(\.id))
+        let safeTheme = themePackId.flatMap { knownThemeIds.contains($0) ? $0 : nil }
+        let safeHero = safeTheme.flatMap { themeId in
+            let pack = ResultThemePack.find(themeId)
+            return pack.heroStickers.contains(heroStickerId ?? "") ? heroStickerId : pack.heroStickers.first
+        }
+        return TemplateOutcome(
+            id: id.isEmpty ? UUID().uuidString : id,
+            title: String(title.trimmingCharacters(in: .whitespacesAndNewlines).prefix(18)),
+            subtitle: String(subtitle.trimmingCharacters(in: .whitespacesAndNewlines).prefix(30)),
+            resultLevel: String(resultLevel.trimmingCharacters(in: .whitespacesAndNewlines).prefix(16)),
+            quote: String(quote.trimmingCharacters(in: .whitespacesAndNewlines).prefix(36)),
+            finalComment: String(finalComment.trimmingCharacters(in: .whitespacesAndNewlines).prefix(50)),
+            evidencePool: Array(evidencePool.map {
+                String($0.trimmingCharacters(in: .whitespacesAndNewlines).prefix(28))
+            }.filter { !$0.isEmpty }.prefix(6)),
+            stats: Array(stats.map { $0.normalized() }.filter { !$0.name.isEmpty }.prefix(3)),
+            themePackId: safeTheme,
+            heroStickerId: safeHero
+        )
+    }
+
+    var isUsable: Bool {
+        let outcome = normalized()
+        return !outcome.title.isEmpty &&
+            !outcome.subtitle.isEmpty &&
+            !outcome.resultLevel.isEmpty &&
+            !outcome.quote.isEmpty &&
+            !outcome.finalComment.isEmpty &&
+            outcome.evidencePool.count >= 3 &&
+            outcome.stats.count >= 2
+    }
+}
+
+struct OptionOutcomeWeight: Codable, Equatable, Identifiable {
+    var id: String = UUID().uuidString
+    var fieldId: String
+    var option: String
+    var scores: [String: Int]
+
+    func normalized(validOutcomeIds: Set<String>) -> OptionOutcomeWeight {
+        OptionOutcomeWeight(
+            id: id.isEmpty ? UUID().uuidString : id,
+            fieldId: fieldId,
+            option: String(option.trimmingCharacters(in: .whitespacesAndNewlines).prefix(16)),
+            scores: scores.reduce(into: [:]) { result, item in
+                guard validOutcomeIds.contains(item.key) else { return }
+                result[item.key] = min(10, max(0, item.value))
+            }
+        )
+    }
+}
+
+struct TemplateOutcomePackage: Codable, Equatable {
+    var outcomes: [TemplateOutcome]
+    var weights: [OptionOutcomeWeight]
+
+    func normalized() -> TemplateOutcomePackage {
+        let safeOutcomes = Array(outcomes.map { $0.normalized() }.filter(\.isUsable).prefix(8))
+        let validOutcomeIds = Set(safeOutcomes.map(\.id))
+        return TemplateOutcomePackage(
+            outcomes: safeOutcomes,
+            weights: Array(weights.map { $0.normalized(validOutcomeIds: validOutcomeIds) }
+                .filter { !$0.fieldId.isEmpty && !$0.option.isEmpty }
+                .prefix(64))
+        )
+    }
+
+    var isUsable: Bool {
+        let package = normalized()
+        return package.outcomes.count >= 4
+    }
+
+    static func starter(fields: [TemplateField]) -> TemplateOutcomePackage {
+        let outcomes = [
+            TemplateOutcome(title: "气氛中心", subtitle: "你一出现，群聊就自动开场", resultLevel: "朋友圈主角", quote: "平时看着低调，关键时刻从不缺节目效果。", finalComment: "你的回答已经暴露了隐藏属性：表面随和，实际自带气氛加成。", evidencePool: ["出场自带话题，不需要额外铺垫", "看似随手一选，其实很会拿捏气氛", "朋友局里总能贡献意外名场面"], stats: [TemplateOutcomeStat(name: "话题浓度", value: 92), TemplateOutcomeStat(name: "分享欲", value: 88)]),
+            TemplateOutcome(title: "稳中带梗", subtitle: "不抢镜，但每次都能精准补刀", resultLevel: "冷静观察员", quote: "不必频繁发言，开口就是重点。", finalComment: "你属于慢热型整活选手，平时安静，真正出手时往往最有效。", evidencePool: ["习惯先观察，再给出关键一击", "不靠音量取胜，靠的是时机", "别人还在铺垫，你已经看穿结局"], stats: [TemplateOutcomeStat(name: "观察指数", value: 90), TemplateOutcomeStat(name: "精准度", value: 86)]),
+            TemplateOutcome(title: "反差选手", subtitle: "越认真回答，越容易制造惊喜", resultLevel: "隐藏彩蛋", quote: "看起来很正常，细看每一项都不太简单。", finalComment: "你的答案组合充满反差感，属于截图发出去最容易引发讨论的类型。", evidencePool: ["答案组合看似合理，拼起来却很有戏", "越往后看，反差越明显", "属于需要二刷才能看懂的隐藏角色"], stats: [TemplateOutcomeStat(name: "反差指数", value: 94), TemplateOutcomeStat(name: "回味程度", value: 84)]),
+            TemplateOutcome(title: "随缘天才", subtitle: "没有刻意安排，但结果总是很有效果", resultLevel: "随机事件制造者", quote: "你甚至没想整活，整活却会主动找到你。", finalComment: "你的路线无法简单归类，最大的特点就是每次都能自然地产生新剧情。", evidencePool: ["选择没有固定套路，胜在自然", "擅长在普通场景里触发随机事件", "朋友很难预测你的下一步操作"], stats: [TemplateOutcomeStat(name: "随机指数", value: 89), TemplateOutcomeStat(name: "剧情浓度", value: 91)])
+        ]
+        let weights = fields.flatMap { field in
+            guard field.type == .singleSelect || field.type == .multiSelect else { return [] }
+            return field.options.enumerated().map { optionIndex, option in
+                OptionOutcomeWeight(
+                    fieldId: field.id,
+                    option: option,
+                    scores: [outcomes[optionIndex % outcomes.count].id: 6]
+                )
+            }
+        }
+        return TemplateOutcomePackage(outcomes: outcomes, weights: weights)
+    }
+}
+
 struct TemplateResultConfig: Codable, Equatable {
-    static let currentVersion = 3
+    static let currentVersion = 4
 
     var version: Int = currentVersion
     var layout: ResultLayoutPreset = .socialPoster
@@ -89,6 +210,7 @@ struct TemplateResultConfig: Codable, Equatable {
     var moduleOrder: [ResultModuleKind] = ResultModuleKind.allCases
     var hiddenModules: [ResultModuleKind] = [.fields]
     var copyLibrary: TemplateCopyLibrary? = nil
+    var outcomePackage: TemplateOutcomePackage? = nil
 
     static let `default` = TemplateResultConfig()
 
@@ -127,7 +249,8 @@ struct TemplateResultConfig: Codable, Equatable {
             defaultDecorationStickerIds: decorations,
             moduleOrder: ordered,
             hiddenModules: hidden,
-            copyLibrary: copyLibrary?.normalized()
+            copyLibrary: copyLibrary?.normalized(),
+            outcomePackage: outcomePackage?.normalized()
         )
     }
 
@@ -262,7 +385,9 @@ struct ResultCardDocument: Identifiable {
             createdAt: LocalTimeFormatter.now(),
             config: template.resultConfig,
             preview: false,
-            seed: seed
+            seed: seed,
+            fieldsDefinition: template.customFields ?? [],
+            inputs: inputs
         )
     }
 
@@ -279,7 +404,9 @@ struct ResultCardDocument: Identifiable {
             createdAt: "预览",
             config: config,
             preview: true,
-            seed: 88
+            seed: 88,
+            fieldsDefinition: fields,
+            inputs: Dictionary(uniqueKeysWithValues: previewFields.map { ($0.label, $0.value) })
         )
     }
 
@@ -292,7 +419,9 @@ struct ResultCardDocument: Identifiable {
         createdAt: String,
         config: TemplateResultConfig,
         preview: Bool,
-        seed: Int
+        seed: Int,
+        fieldsDefinition: [TemplateField],
+        inputs: [String: String]
     ) -> ResultCardDocument {
         let visibleFields = fields.filter { !$0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         let evidenceTemplates: [(ResultFieldValue) -> String] = [
@@ -309,6 +438,30 @@ struct ResultCardDocument: Identifiable {
         let atmosphereScore = preview ? 96 : 74 + (seed / 7) % 25
         let resultLevels = ["自带话题体质", "朋友圈主角", "现场气氛担当", "整活潜力拉满"]
         let quotes = ["这波不是普通发挥，是可以直接截图发群的程度。", "结论已经很明显：今天的节目效果由你负责。", "看似随手一填，实际已经把气氛拿捏住了。", "建议保留证据，群友迟早会回来复盘。"]
+        if let outcome = selectOutcome(
+            package: config.normalized().outcomePackage,
+            fields: fieldsDefinition,
+            inputs: inputs,
+            seed: seed,
+            preview: preview
+        ) {
+            return make(
+                id: id,
+                templateId: templateId,
+                title: outcome.title,
+                subtitle: outcome.subtitle,
+                fields: fields,
+                stats: outcome.stats.map { StatItem(name: $0.name, value: $0.value) },
+                evidence: pick(outcome.evidencePool, count: 3, seed: seed),
+                resultLevel: outcome.resultLevel,
+                quote: outcome.quote,
+                finalComment: outcome.finalComment,
+                createdAt: createdAt,
+                config: config,
+                themePackId: outcome.themePackId,
+                heroStickerId: outcome.heroStickerId
+            )
+        }
         return make(
             id: id,
             templateId: templateId,
@@ -340,10 +493,12 @@ struct ResultCardDocument: Identifiable {
         quote: String,
         finalComment: String,
         createdAt: String,
-        config: TemplateResultConfig
+        config: TemplateResultConfig,
+        themePackId: String? = nil,
+        heroStickerId: String? = nil
     ) -> ResultCardDocument {
         let cfg = config.normalized()
-        let pack = ResultThemePack.find(cfg.defaultThemePackId)
+        let pack = ResultThemePack.find(themePackId ?? cfg.defaultThemePackId)
         return ResultCardDocument(
             id: id,
             templateId: templateId,
@@ -359,7 +514,7 @@ struct ResultCardDocument: Identifiable {
             createdAt: createdAt,
             themePackId: pack.id,
             backgroundId: pack.backgrounds.randomElement() ?? pack.backgrounds[0],
-            heroStickerId: cfg.defaultHeroStickerId ?? pack.heroStickers.randomElement(),
+            heroStickerId: heroStickerId ?? cfg.defaultHeroStickerId ?? pack.heroStickers.randomElement(),
             decorationStickerIds: Array((cfg.defaultDecorationStickerIds.isEmpty ? pack.decorationStickers.shuffled() : cfg.defaultDecorationStickerIds).prefix(3)),
             moduleOrder: cfg.moduleOrder,
             hiddenModules: Set(cfg.hiddenModules)
@@ -384,6 +539,34 @@ struct ResultCardDocument: Identifiable {
             hash &*= 1_099_511_628_211
         }
         return Int(hash % 10_000)
+    }
+
+    private static func selectOutcome(
+        package: TemplateOutcomePackage?,
+        fields: [TemplateField],
+        inputs: [String: String],
+        seed: Int,
+        preview: Bool
+    ) -> TemplateOutcome? {
+        guard let package, package.isUsable else { return nil }
+        let normalized = package.normalized()
+        if preview { return normalized.outcomes.first }
+
+        var scores = Dictionary(uniqueKeysWithValues: normalized.outcomes.map { ($0.id, 0) })
+        for weight in normalized.weights {
+            guard let field = fields.first(where: { $0.id == weight.fieldId }),
+                  let answer = inputs[field.label] else { continue }
+            let selected = Set(answer.split(separator: "、").map(String.init))
+            guard selected.contains(weight.option) else { continue }
+            for (outcomeId, value) in weight.scores {
+                scores[outcomeId, default: 0] += value
+            }
+        }
+
+        let highestScore = scores.values.max() ?? 0
+        let tied = normalized.outcomes.filter { scores[$0.id, default: 0] == highestScore }
+        guard !tied.isEmpty else { return normalized.outcomes.first }
+        return tied[abs(seed) % tied.count]
     }
 
     private static func pickOne(_ values: [String], seed: Int) -> String {

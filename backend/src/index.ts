@@ -93,10 +93,34 @@ function isValidTemplateFormConfig(raw: string): boolean {
 }
 
 function isValidResultConfig(raw: string): boolean {
-    if (!raw || raw.length > 20000) return false;
+    if (!raw || raw.length > 50000) return false;
     try {
         const parsed = JSON.parse(raw);
-        return parsed && typeof parsed === 'object' && !Array.isArray(parsed);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
+        const outcomePackage = parsed.outcomePackage;
+        if (!outcomePackage) return true;
+        if (!Array.isArray(outcomePackage.outcomes) || outcomePackage.outcomes.length < 4 || outcomePackage.outcomes.length > 8) return false;
+        if (!Array.isArray(outcomePackage.weights) || outcomePackage.weights.length > 64) return false;
+        const outcomeIds = new Set<string>();
+        for (const outcome of outcomePackage.outcomes) {
+            const id = cleanText(outcome?.id);
+            if (!id || id.length > 64 || outcomeIds.has(id)) return false;
+            if (!isTextWithin(outcome?.title, 18) || !isTextWithin(outcome?.subtitle, 30) || !isTextWithin(outcome?.resultLevel, 16)) return false;
+            if (!isTextWithin(outcome?.quote, 36) || !isTextWithin(outcome?.finalComment, 50)) return false;
+            if (!Array.isArray(outcome?.evidencePool) || outcome.evidencePool.length < 3 || outcome.evidencePool.length > 6) return false;
+            if (!Array.isArray(outcome?.stats) || outcome.stats.length < 2 || outcome.stats.length > 3) return false;
+            if (outcome.evidencePool.some((item: any) => !isTextWithin(item, 28) || containsUnsafeText(s(item)))) return false;
+            if (outcome.stats.some((item: any) => !isTextWithin(item?.name, 12) || n(item?.value, -1) < 0 || n(item?.value, 101) > 100)) return false;
+            outcomeIds.add(id);
+        }
+        for (const weight of outcomePackage.weights) {
+            if (!isTextWithin(weight?.fieldId, 64) || !isTextWithin(weight?.option, 16)) return false;
+            if (!weight?.scores || typeof weight.scores !== 'object' || Array.isArray(weight.scores)) return false;
+            for (const [outcomeId, score] of Object.entries(weight.scores)) {
+                if (!outcomeIds.has(outcomeId) || !Number.isInteger(Number(score)) || n(score, -1) < 0 || n(score, 11) > 10) return false;
+            }
+        }
+        return true;
     } catch {
         return false;
     }
@@ -110,6 +134,11 @@ const DEFAULT_AI_MODEL = "@cf/meta/llama-3.1-8b-instruct-fast";
 const ALLOWED_AI_TONES = new Set(["default", "sharp", "cute", "absurd", "formal", "moments"]);
 const OPTIMIZED_COPY_KEYS = ["title", "subtitle", "evidence", "resultLevel", "quote", "finalComment"];
 const TEMPLATE_COPY_KEYS = ["stats", "evidencePool", "finalPool", "levels"];
+const GAME_PACKAGE_KEYS = ["description", "questions", "outcomes", "weights"];
+const GAME_QUESTION_KEYS = ["id", "label", "type", "placeholder", "options", "minCount", "maxCount"];
+const GAME_OUTCOME_KEYS = ["id", "title", "subtitle", "resultLevel", "quote", "finalComment", "evidencePool", "stats"];
+const GAME_STAT_KEYS = ["id", "name", "value"];
+const GAME_WEIGHT_KEYS = ["id", "fieldId", "option", "scores"];
 const UGC_REVIEW_KEYS = ["allowed", "reason", "riskTags"];
 
 const OPTIMIZED_COPY_SCHEMA = {
@@ -161,6 +190,97 @@ const TEMPLATE_COPY_SCHEMA = {
         },
     },
     required: TEMPLATE_COPY_KEYS,
+};
+
+const GAME_PACKAGE_SCHEMA = {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+        description: { type: "string", minLength: 1, maxLength: 120 },
+        questions: {
+            type: "array",
+            minItems: 4,
+            maxItems: 6,
+            items: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                    id: { type: "string", minLength: 1, maxLength: 36 },
+                    label: { type: "string", minLength: 1, maxLength: 12 },
+                    type: { type: "string", enum: ["singleSelect", "multiSelect"] },
+                    placeholder: { type: "string", maxLength: 30 },
+                    options: {
+                        type: "array",
+                        minItems: 2,
+                        maxItems: 6,
+                        items: { type: "string", minLength: 1, maxLength: 16 },
+                    },
+                    minCount: { type: "integer", minimum: 0, maximum: 12 },
+                    maxCount: { type: "integer", minimum: 0, maximum: 12 },
+                },
+                required: GAME_QUESTION_KEYS,
+            },
+        },
+        outcomes: {
+            type: "array",
+            minItems: 4,
+            maxItems: 6,
+            items: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                    id: { type: "string", minLength: 1, maxLength: 36 },
+                    title: { type: "string", minLength: 1, maxLength: 18 },
+                    subtitle: { type: "string", minLength: 1, maxLength: 30 },
+                    resultLevel: { type: "string", minLength: 1, maxLength: 16 },
+                    quote: { type: "string", minLength: 1, maxLength: 36 },
+                    finalComment: { type: "string", minLength: 1, maxLength: 50 },
+                    evidencePool: {
+                        type: "array",
+                        minItems: 3,
+                        maxItems: 6,
+                        items: { type: "string", minLength: 1, maxLength: 28 },
+                    },
+                    stats: {
+                        type: "array",
+                        minItems: 2,
+                        maxItems: 3,
+                        items: {
+                            type: "object",
+                            additionalProperties: false,
+                            properties: {
+                                id: { type: "string", minLength: 1, maxLength: 36 },
+                                name: { type: "string", minLength: 1, maxLength: 12 },
+                                value: { type: "integer", minimum: 0, maximum: 100 },
+                            },
+                            required: GAME_STAT_KEYS,
+                        },
+                    },
+                },
+                required: GAME_OUTCOME_KEYS,
+            },
+        },
+        weights: {
+            type: "array",
+            minItems: 8,
+            maxItems: 36,
+            items: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                    id: { type: "string", minLength: 1, maxLength: 36 },
+                    fieldId: { type: "string", minLength: 1, maxLength: 36 },
+                    option: { type: "string", minLength: 1, maxLength: 16 },
+                    scores: {
+                        type: "object",
+                        additionalProperties: { type: "integer", minimum: 0, maximum: 10 },
+                    },
+                },
+                required: GAME_WEIGHT_KEYS,
+            },
+        },
+    },
+    required: GAME_PACKAGE_KEYS,
 };
 
 const UGC_REVIEW_SCHEMA = {
@@ -316,6 +436,7 @@ function sanitizeResultDocument(value: any): Record<string, any> {
 function sanitizeTemplateFields(value: any): Record<string, any>[] {
     if (!Array.isArray(value)) return [];
     return value.slice(0, 8).map((field: any) => ({
+        id: safeText(field?.id, 36),
         label: safeText(field?.label, 12),
         type: safeText(field?.type, 20),
         placeholder: safeText(field?.placeholder, 30),
@@ -370,7 +491,85 @@ function validateTemplateCopy(value: any): any | null {
     return result;
 }
 
-async function runJSONAI(env: Env, system: string, user: string, jsonSchema: Record<string, any>): Promise<any> {
+function validateGamePackage(value: any): any | null {
+    if (!value || typeof value !== "object" || Array.isArray(value) || !hasExactKeys(value, GAME_PACKAGE_KEYS)) return null;
+    const description = outputText(value.description, 120);
+    if (description === null || !Array.isArray(value.questions) || value.questions.length < 4 || value.questions.length > 6) return null;
+    if (!Array.isArray(value.outcomes) || value.outcomes.length < 4 || value.outcomes.length > 6) return null;
+    if (!Array.isArray(value.weights) || value.weights.length < 8 || value.weights.length > 36) return null;
+
+    const questionIds = new Set<string>();
+    const questions = value.questions.map((question: any) => {
+        if (!question || typeof question !== "object" || Array.isArray(question) || !hasExactKeys(question, GAME_QUESTION_KEYS)) return null;
+        const id = outputText(question.id, 36);
+        const label = outputText(question.label, 12);
+        const type = s(question.type);
+        const placeholder = outputText(question.placeholder, 30, true);
+        const options = outputTextArray(question.options, 2, 6, 16);
+        if (id === null || label === null || placeholder === null || options === null || questionIds.has(id)) return null;
+        if (!["singleSelect", "multiSelect"].includes(type) || new Set(options).size !== options.length) return null;
+        questionIds.add(id);
+        return { id, label, type, placeholder, options, minCount: 0, maxCount: 0 };
+    });
+    if (questions.some((question: any) => question === null)) return null;
+
+    const outcomeIds = new Set<string>();
+    const outcomes = value.outcomes.map((outcome: any) => {
+        if (!outcome || typeof outcome !== "object" || Array.isArray(outcome) || !hasExactKeys(outcome, GAME_OUTCOME_KEYS)) return null;
+        const id = outputText(outcome.id, 36);
+        const title = outputText(outcome.title, 18);
+        const subtitle = outputText(outcome.subtitle, 30);
+        const resultLevel = outputText(outcome.resultLevel, 16);
+        const quote = outputText(outcome.quote, 36);
+        const finalComment = outputText(outcome.finalComment, 50);
+        const evidencePool = outputTextArray(outcome.evidencePool, 3, 6, 28);
+        if (id === null || title === null || subtitle === null || resultLevel === null || quote === null || finalComment === null || evidencePool === null || outcomeIds.has(id)) return null;
+        if (!Array.isArray(outcome.stats) || outcome.stats.length < 2 || outcome.stats.length > 3) return null;
+        const statIds = new Set<string>();
+        const stats = outcome.stats.map((stat: any) => {
+            if (!stat || typeof stat !== "object" || Array.isArray(stat) || !hasExactKeys(stat, GAME_STAT_KEYS)) return null;
+            const statId = outputText(stat.id, 36);
+            const name = outputText(stat.name, 12);
+            const numberValue = Number(stat.value);
+            if (statId === null || name === null || statIds.has(statId) || !Number.isInteger(numberValue) || numberValue < 0 || numberValue > 100) return null;
+            statIds.add(statId);
+            return { id: statId, name, value: numberValue };
+        });
+        if (stats.some((stat: any) => stat === null)) return null;
+        outcomeIds.add(id);
+        return { id, title, subtitle, resultLevel, quote, finalComment, evidencePool, stats };
+    });
+    if (outcomes.some((outcome: any) => outcome === null)) return null;
+
+    const expectedOptions = new Set<string>();
+    for (const question of questions) {
+        for (const option of question.options) expectedOptions.add(`${question.id}\u0000${option}`);
+    }
+    const coveredOptions = new Set<string>();
+    const weightIds = new Set<string>();
+    const weights = value.weights.map((weight: any) => {
+        if (!weight || typeof weight !== "object" || Array.isArray(weight) || !hasExactKeys(weight, GAME_WEIGHT_KEYS)) return null;
+        const id = outputText(weight.id, 36);
+        const fieldId = outputText(weight.fieldId, 36);
+        const option = outputText(weight.option, 16);
+        if (id === null || fieldId === null || option === null || weightIds.has(id) || !expectedOptions.has(`${fieldId}\u0000${option}`)) return null;
+        if (!weight.scores || typeof weight.scores !== "object" || Array.isArray(weight.scores)) return null;
+        const scores: Record<string, number> = {};
+        for (const [outcomeId, rawScore] of Object.entries(weight.scores)) {
+            const score = Number(rawScore);
+            if (!outcomeIds.has(outcomeId) || !Number.isInteger(score) || score < 0 || score > 10) return null;
+            scores[outcomeId] = score;
+        }
+        if (Object.values(scores).every((score) => score <= 0)) return null;
+        weightIds.add(id);
+        coveredOptions.add(`${fieldId}\u0000${option}`);
+        return { id, fieldId, option, scores };
+    });
+    if (weights.some((weight: any) => weight === null) || coveredOptions.size !== expectedOptions.size) return null;
+    return { description, questions, outcomes, weights };
+}
+
+async function runJSONAI(env: Env, system: string, user: string, jsonSchema: Record<string, any>, maxTokens: number = 900): Promise<any> {
     const model = env.AI_MODEL || DEFAULT_AI_MODEL;
     const response = await env.AI.run(model, {
         messages: [
@@ -381,7 +580,7 @@ async function runJSONAI(env: Env, system: string, user: string, jsonSchema: Rec
             type: "json_schema",
             json_schema: jsonSchema,
         },
-        max_tokens: 900,
+        max_tokens: maxTokens,
         temperature: 0.75,
     });
     return parseAIJSON(response);
@@ -1346,6 +1545,95 @@ stats 为 2 到 4 个短指标名称；evidencePool 为至少 3 条轻松证据�
                     }, { headers: corsHeaders });
                 } catch (error) {
                     console.error("AI template copy failed:", error);
+                    await finishAIUsage(env, requestId, "failed");
+                    return aiError("AI_UPSTREAM_FAILED", 502, corsHeaders, "AI service is temporarily unavailable");
+                }
+            }
+
+            if (path === "/api/ai/generate-game-package" && method === "POST") {
+                const body: any = await request.json();
+                const requestId = safeText(body.requestId, 128);
+                const templateTitle = safeText(body.templateTitle, 15);
+                const templateDescription = safeText(body.templateDescription, 120);
+                const category = safeText(body.category, 16);
+                const workflow = safeText(body.workflow, 120);
+                const fields = sanitizeTemplateFields(body.fields);
+                const tone = safeText(body.tone || "default", 20);
+                if (!requestId || !templateTitle || !category || !ALLOWED_AI_TONES.has(tone)) {
+                    return aiError("AI_INVALID_REQUEST", 400, corsHeaders, "Invalid AI game package request");
+                }
+                const templateContext = { templateTitle, templateDescription, category, workflow, fields, tone };
+                if (containsUnsafeText(JSON.stringify(templateContext))) {
+                    return Response.json({
+                        error: "Template content was rejected",
+                        code: "AI_UGC_REJECTED",
+                        reason: "玩法内容包含不适合公开传播的信息，请修改标题、描述或填写项后再试。",
+                    }, { status: 422, headers: corsHeaders });
+                }
+
+                const quota = await getAIQuotaStatus(request, env, safeUserId);
+                if (!quota.isVip) {
+                    return aiError("VIP_REQUIRED", 403, corsHeaders, "VIP is required for game package generation");
+                }
+                if (quota.remaining <= 0) {
+                    return aiError("AI_QUOTA_EXCEEDED", 429, corsHeaders, "AI quota exceeded");
+                }
+
+                const model = env.AI_MODEL || DEFAULT_AI_MODEL;
+                if (!await reserveAIUsage(env, requestId, safeUserId, "generate_game_package", tone, model)) {
+                    return aiError("AI_REQUEST_REPLAY", 409, corsHeaders, "Duplicate AI request");
+                }
+                const reservedQuota = await getAIQuotaStatus(request, env, safeUserId);
+                if (reservedQuota.used > reservedQuota.limit) {
+                    await finishAIUsage(env, requestId, "failed");
+                    return aiError("AI_QUOTA_EXCEEDED", 429, corsHeaders, "AI quota exceeded");
+                }
+
+                try {
+                    const review = validateUGCReview(await runJSONAI(
+                        env,
+                        `你是 UGC 内容安全审核员。判断一个中文互动娱乐玩法是否适合公开生成和分享。
+拒绝以下内容：违法违规、威胁伤害、仇恨歧视、色情低俗、赌博毒品、自伤引导、隐私收集、联系方式导流、针对个人的恶意羞辱或明显骚扰。
+允许普通朋友间娱乐、状态测试、投票、聚会游戏和轻松调侃。只有输入文本中存在明确、具体的风险内容时才拒绝，不得凭空推测潜在恶意。
+没有明确风险时必须返回 allowed=true、reason=""、riskTags=[]。只输出 JSON 对象，字段必须为 allowed、reason、riskTags。不要输出 Markdown。`,
+                        JSON.stringify(templateContext),
+                        UGC_REVIEW_SCHEMA
+                    ));
+                    if (!review) {
+                        await finishAIUsage(env, requestId, "failed");
+                        return aiError("AI_INVALID_RESPONSE", 502, corsHeaders, "AI returned invalid moderation content");
+                    }
+                    if (!review.allowed) {
+                        await finishAIUsage(env, requestId, "rejected");
+                        return Response.json({
+                            error: "Template content was rejected",
+                            code: "AI_UGC_REJECTED",
+                            reason: review.reason || "玩法内容不适合公开传播，请修改后重试。",
+                        }, { status: 422, headers: corsHeaders });
+                    }
+
+                    const generated = validateGamePackage(await runJSONAI(
+                        env,
+                        `你是中文互动玩法策划。基于玩法主题生成一个完整可玩的朋友局测试。只输出 JSON 对象，字段必须为 description、questions、outcomes、weights。
+questions 必须生成 4 到 6 道单选题或多选题，每题 2 到 6 个选项。每题 id 使用 q1、q2 这类短 ID。
+outcomes 必须生成 4 到 6 个差异明显的人设结果。每个人设包含独立标题、副标题、等级、金句、结论、3 到 6 条证据和 2 到 3 个指标。人设 id 使用 o1、o2 这类短 ID，指标 id 使用 s1、s2 这类短 ID。
+weights 必须覆盖每一道题的每一个选项，每个选项只创建一条权重记录。fieldId 必须引用问题 id，scores 的 key 必须引用人设 id，分值为 0 到 10 的整数，至少一个分值大于 0。权重 id 使用 w1、w2 这类短 ID。
+不同答案应有明确倾向，避免所有选项平均分配。文字适合朋友娱乐分享，不得输出威胁、歧视、隐私信息、恶意羞辱或联系方式。不要解释，不要输出 Markdown。`,
+                        JSON.stringify(templateContext),
+                        GAME_PACKAGE_SCHEMA,
+                        2600
+                    ));
+                    if (!generated) {
+                        await finishAIUsage(env, requestId, "failed");
+                        return aiError("AI_INVALID_RESPONSE", 502, corsHeaders, "AI returned invalid game package");
+                    }
+                    await finishAIUsage(env, requestId, "succeeded");
+                    return Response.json({
+                        ...generated,
+                        quota: await getAIQuotaStatus(request, env, safeUserId),
+                    }, { headers: corsHeaders });
+                } catch (error) {
+                    console.error("AI game package failed:", error);
                     await finishAIUsage(env, requestId, "failed");
                     return aiError("AI_UPSTREAM_FAILED", 502, corsHeaders, "AI service is temporarily unavailable");
                 }

@@ -5,7 +5,7 @@ struct AITemplateCopySheet: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var tone: AITone = .moments
-    @State private var receipt: AITemplateCopyReceipt?
+    @State private var receipt: AIGamePackageReceipt?
     @State private var rejectionReason: String?
     @State private var isLoading = false
     @State private var alertMessage = ""
@@ -15,7 +15,7 @@ struct AITemplateCopySheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    Text("AI 会为玩法生成指标、趣味证据、结论和结果等级。采用后仍可继续手动调整。")
+                    Text("AI 会一次生成题目、答案权重和 4 至 8 个结果人设。采用后仍可继续手动调整。")
                         .font(.system(size: 13))
                         .foregroundColor(.themeTextSecondary)
 
@@ -36,7 +36,7 @@ struct AITemplateCopySheet: View {
                     Button(action: generate) {
                         HStack {
                             if isLoading { ProgressView().scaleEffect(0.8) }
-                            Text(isLoading ? "AI 正在审核并构思..." : (receipt == nil ? "生成玩法文案库" : "重新生成一套"))
+                            Text(isLoading ? "AI 正在审核并构思..." : (receipt == nil ? "生成完整玩法包" : "重新生成一套"))
                         }
                         .font(.system(size: 15, weight: .bold))
                         .foregroundColor(.themeTextMain)
@@ -48,22 +48,24 @@ struct AITemplateCopySheet: View {
                     .disabled(isLoading)
 
                     if let receipt {
-                        preview(title: "指标", values: receipt.stats)
-                        preview(title: "趣味证据池", values: receipt.evidencePool)
-                        preview(title: "结论池", values: receipt.finalPool)
-                        preview(title: "结果等级", values: receipt.levels)
+                        preview(title: "玩法描述", values: [receipt.description])
+                        preview(title: "答题项", values: receipt.questions.map { "\($0.label) · \($0.type.displayName)" })
+                        preview(title: "结果人设", values: receipt.outcomes.map { "\($0.title) · \($0.resultLevel)" })
+                        preview(title: "答案权重", values: ["已生成 \(receipt.weights.count) 组选项权重，可在结果图设计中继续调整。"])
 
                         Button {
-                            let library = receipt.library.normalized()
-                            guard library.isUsable else {
-                                alertMessage = "AI 文案不完整，请重新生成"
+                            let package = receipt.package.normalized()
+                            guard package.isUsable else {
+                                alertMessage = "AI 玩法包不完整，请重新生成"
                                 showAlert = true
                                 return
                             }
-                            draft.resultConfig.copyLibrary = library
+                            draft.description = receipt.description
+                            draft.fields = receipt.questions
+                            draft.resultConfig.outcomePackage = package
                             dismiss()
                         } label: {
-                            Text("采用这套文案")
+                            Text("采用这套玩法包")
                                 .font(.system(size: 16, weight: .heavy))
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
@@ -147,7 +149,7 @@ struct AITemplateCopySheet: View {
         isLoading = true
         Task {
             do {
-                let generated = try await AIService.shared.generateTemplateCopy(
+                let generated = try await AIService.shared.generateGamePackage(
                     title: title,
                     description: draft.description.trimmingCharacters(in: .whitespacesAndNewlines),
                     category: draft.category,

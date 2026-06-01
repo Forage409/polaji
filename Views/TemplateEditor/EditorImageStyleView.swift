@@ -5,6 +5,7 @@ struct EditorImageStyleView: View {
     @ObservedObject private var vip = VipManager.shared
     @State private var showingAIWriter = false
     @State private var showingPaywall = false
+    @State private var showingOutcomeEditor = false
 
     private var previewDocument: ResultCardDocument {
         ResultCardDocument.preview(config: draft.resultConfig, title: draft.title, fields: draft.fields)
@@ -15,6 +16,7 @@ struct EditorImageStyleView: View {
             VStack(alignment: .leading, spacing: 18) {
                 header
                 aiWriterEntry
+                outcomeEditorEntry
 
                 UnifiedResultCardUI(document: previewDocument)
                     .frame(maxWidth: .infinity)
@@ -55,6 +57,9 @@ struct EditorImageStyleView: View {
                 VIPPaywallView(context: .publisherAI)
             }
         }
+        .sheet(isPresented: $showingOutcomeEditor) {
+            OutcomePackageEditorSheet(draft: draft)
+        }
     }
 
     private var aiWriterEntry: some View {
@@ -69,9 +74,9 @@ struct EditorImageStyleView: View {
                 Image(systemName: "wand.and.stars")
                     .foregroundColor(Color(hex: "7B61FF"))
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("AI 帮写玩法文案库")
+                    Text("AI 生成完整玩法包")
                         .font(.system(size: 14, weight: .bold))
-                    Text(draft.resultConfig.copyLibrary == nil ? "自动生成指标、证据和结论" : "已采用 AI 文案，可继续重新生成")
+                    Text(draft.resultConfig.outcomePackage == nil ? "自动生成题目、人设、证据和答案权重" : "已采用 AI 玩法包，可继续重新生成")
                         .font(.system(size: 12))
                         .foregroundColor(.themeTextSecondary)
                 }
@@ -81,6 +86,34 @@ struct EditorImageStyleView: View {
                         .font(.system(size: 12))
                         .foregroundColor(.themeTextSecondary)
                 }
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.themeTextSecondary)
+            }
+            .foregroundColor(.themeTextMain)
+            .padding(14)
+            .background(Color.white)
+            .cornerRadius(14)
+            .padding(.horizontal, 20)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var outcomeEditorEntry: some View {
+        Button {
+            showingOutcomeEditor = true
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "person.3.sequence.fill")
+                    .foregroundColor(Color(hex: "FF8A5B"))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("结果人设与答案权重")
+                        .font(.system(size: 14, weight: .bold))
+                    Text(draft.resultConfig.outcomePackage == nil ? "为不同答案设计真正不同的结果海报" : "已启用结局引擎，可继续调整")
+                        .font(.system(size: 12))
+                        .foregroundColor(.themeTextSecondary)
+                }
+                Spacer()
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .bold))
                     .foregroundColor(.themeTextSecondary)
