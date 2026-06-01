@@ -1,6 +1,7 @@
 import Foundation
 import Security
 import Combine
+import SwiftUI
 
 final class AccountSessionManager: ObservableObject {
     static let shared = AccountSessionManager()
@@ -73,8 +74,10 @@ final class AccountSessionManager: ObservableObject {
         currentUserId = receipt.profile.id
         Self.save(service: serviceName, account: tokenAccount, value: receipt.token)
         Self.save(service: serviceName, account: userIdAccount, value: receipt.profile.id)
-        isAuthenticated = true
-        isRestoring = false
+        withAnimation(.spring(response: 0.68, dampingFraction: 0.82)) {
+            isAuthenticated = true
+            isRestoring = false
+        }
         apply(profile: receipt.profile)
     }
 
@@ -96,7 +99,9 @@ final class AccountSessionManager: ObservableObject {
         Self.delete(service: serviceName, account: userIdAccount)
         currentSessionToken = ""
         currentUserId = ""
-        isAuthenticated = false
+        withAnimation(.spring(response: 0.68, dampingFraction: 0.84)) {
+            isAuthenticated = false
+        }
         UserProfileStore.shared.resetCachedProfile()
         VipManager.shared.deactivate()
     }

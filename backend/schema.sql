@@ -71,6 +71,9 @@ CREATE TABLE IF NOT EXISTS accounts (
     id TEXT PRIMARY KEY,
     phone_hash TEXT NOT NULL UNIQUE,
     phone_mask TEXT NOT NULL,
+    username_hash TEXT UNIQUE,
+    username_display TEXT NOT NULL DEFAULT '',
+    registration_channel TEXT NOT NULL DEFAULT 'sms',
     nickname TEXT NOT NULL,
     bio TEXT NOT NULL DEFAULT '',
     avatar_url TEXT NOT NULL DEFAULT 'logo',
@@ -113,6 +116,16 @@ CREATE TABLE IF NOT EXISTS account_migrations (
     migrated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS password_login_attempts (
+    id TEXT PRIMARY KEY,
+    username_hash TEXT NOT NULL,
+    ip_hash TEXT NOT NULL,
+    success INTEGER NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE INDEX IF NOT EXISTS idx_account_sessions_token ON account_sessions(token_hash, expires_at);
 CREATE INDEX IF NOT EXISTS idx_sms_requests_phone_created ON sms_requests(phone_hash, created_at);
 CREATE INDEX IF NOT EXISTS idx_sms_requests_ip_created ON sms_requests(ip_hash, created_at);
+CREATE INDEX IF NOT EXISTS idx_password_login_username_created ON password_login_attempts(username_hash, created_at);
+CREATE INDEX IF NOT EXISTS idx_password_login_ip_created ON password_login_attempts(ip_hash, created_at);

@@ -2,31 +2,58 @@ import SwiftUI
 
 struct AccountGateView: View {
     @ObservedObject private var session = AccountSessionManager.shared
+    @ObservedObject private var policy = AuthChannelPolicyStore.shared
 
     var body: some View {
-        Group {
+        ZStack {
+            Color(hex: "FAFAFC").ignoresSafeArea()
+
             if session.isRestoring {
-                ZStack {
-                    Color(hex: "FAFAFC").ignoresSafeArea()
-                    ProgressView("正在恢复账号...")
-                }
+                AccountLaunchView()
+                    .transition(.opacity.combined(with: .scale(scale: 1.04)))
             } else if session.isAuthenticated {
                 ContentView()
+                    .transition(
+                        .asymmetric(
+                            insertion: .opacity.combined(with: .scale(scale: 1.035)),
+                            removal: .opacity.combined(with: .scale(scale: 0.97))
+                        )
+                    )
             } else {
                 NavigationStack {
                     LoginView()
                 }
+                .transition(
+                    .asymmetric(
+                        insertion: .opacity.combined(with: .move(edge: .bottom)),
+                        removal: .opacity.combined(with: .scale(scale: 1.04))
+                    )
+                )
             }
         }
+        .animation(.spring(response: 0.72, dampingFraction: 0.84), value: session.isAuthenticated)
+        .animation(.easeInOut(duration: 0.42), value: session.isRestoring)
         .task {
-            await session.restoreSession()
+            async let restore: Void = session.restoreSession()
+            async let refresh: Void = policy.refresh()
+            _ = await (restore, refresh)
         }
     }
 }
 
+private enum AuthLoginMode: String {
+    case sms
+    case password
+}
+
 struct LoginView: View {
+    @ObservedObject private var policy = AuthChannelPolicyStore.shared
+
+    @State private var mode: AuthLoginMode = .sms
     @State private var phone = ""
+    @State private var username = ""
     @State private var code = ""
+    @State private var password = ""
     @State private var challengeId = ""
     @State private var cooldown = 0
     @State private var isSending = false
@@ -36,26 +63,79 @@ struct LoginView: View {
 
     var body: some View {
         AuthPage(title: "登录", subtitle: "欢迎回来，继续你的整活之旅") {
-            AuthInputRow(icon: "iphone", placeholder: "请输入手机号", text: $phone, keyboard: .numberPad)
-                .onChange(of: phone) { phone = String($0.filter(\.isNumber).prefix(11)) }
-            AuthCodeRow(code: $code, cooldown: cooldown, isSending: isSending, action: sendCode)
+            AuthChannelBadge(policy: policy)
+            AuthModePicker(mode: mode, smsDisabled: policy.usesPasswordReserve, onSelect: selectMode)
+
+            Group {
+                if mode == .sms {
+                    AuthInputRow(icon: "iphone", placeholder: "请输入手机号", text: $phone, keyboard: .numberPad)
+                        .onChange(of: phone) { phone = String($0.filter(\.isNumber).prefix(11)) }
+                    AuthCodeRow(code: $code, cooldown: cooldown, isSending: isSending, action: sendCode)
+                } else {
+                    AuthInputRow(icon: "person.text.rectangle", placeholder: "请输入用户名或注册手机号", text: $username)
+                        .onChange(of: username) { username = String($0.prefix(20)) }
+                    AuthSecureRow(text: $password, placeholder: "请输入密码（6-20位）")
+                    Text("通过短信注册过？用户名就是你的手机号，直接输入手机号和注册时设置的密码即可登录。")
+                        .font(.system(size: 12))
+                        .foregroundColor(.themeTextSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+            }
+            .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
+
             AuthPrimaryButton(title: isSubmitting ? "登录中..." : "登录", disabled: isSubmitting, action: submit)
-                .padding(.top, 20)
+                .padding(.top, 10)
+
             HStack(spacing: 8) {
                 Text("还没有账号？")
                     .foregroundColor(.themeTextSecondary)
-                NavigationLink("去注册") { RegisterView() }
-                    .foregroundColor(Color(hex: "E8AF16"))
+                NavigationLink("去注册") {
+                    RegisterView { existingPhone in
+                        phone = existingPhone
+                        username = existingPhone
+                        withAnimation(.spring(response: 0.48, dampingFraction: 0.84)) {
+                            mode = .password
+                        }
+                        show(message: "这个手机号已经注册。用户名就是手机号，请输入之前设置的密码。")
+                    }
+                }
+                .foregroundColor(Color(hex: "E8AF16"))
             }
             .font(.system(size: 15))
             .frame(maxWidth: .infinity)
-            .padding(.top, 18)
+            .padding(.top, 8)
         }
-        .toast(isPresented: $showAlert, message: alertMessage)
+        .toast(isPresented: $showAlert, message: alertMessage, duration: 2.8)
+        .task {
+            await policy.refresh()
+            if policy.usesPasswordReserve {
+                switchToPassword(message: "短信注册名额即将用完，已自动进入账号密码模式。")
+            }
+        }
+        .onChange(of: policy.usesPasswordReserve) { enabled in
+            if enabled {
+                switchToPassword(message: "短信通道已进入应急状态，已自动切换到账号密码登录。")
+            }
+        }
+    }
+
+    private func selectMode(_ selected: AuthLoginMode) {
+        if selected == .sms && policy.usesPasswordReserve {
+            show(message: "短信通道已进入应急状态，请使用用户名和密码登录。")
+            return
+        }
+        withAnimation(.spring(response: 0.48, dampingFraction: 0.84)) {
+            mode = selected
+        }
     }
 
     private func sendCode() {
         guard !isSending, cooldown == 0 else { return }
+        guard !policy.usesPasswordReserve else {
+            switchToPassword(message: "短信通道已进入应急状态，请使用用户名和密码登录。")
+            return
+        }
         isSending = true
         Task {
             do {
@@ -67,7 +147,14 @@ struct LoginView: View {
                     startCountdown()
                 }
             } catch {
-                await show(error)
+                await MainActor.run {
+                    if error.requestsPasswordFallback {
+                        policy.activatePasswordReserve(reason: error.localizedDescription)
+                        switchToPassword(message: error.localizedDescription)
+                    } else {
+                        show(error)
+                    }
+                }
             }
         }
     }
@@ -77,15 +164,29 @@ struct LoginView: View {
         isSubmitting = true
         Task {
             do {
-                let receipt = try await AccountService.shared.login(phone: phone, code: code, challengeId: challengeId)
+                let receipt: AccountAuthReceipt
+                if mode == .sms {
+                    receipt = try await AccountService.shared.login(phone: phone, code: code, challengeId: challengeId)
+                } else {
+                    receipt = try await AccountService.shared.passwordLogin(username: username, password: password)
+                }
                 await MainActor.run {
                     AccountSessionManager.shared.accept(receipt: receipt)
                     isSubmitting = false
                 }
             } catch {
-                await show(error)
+                await MainActor.run { show(error) }
             }
         }
+    }
+
+    private func switchToPassword(message: String) {
+        if username.isEmpty { username = phone }
+        isSending = false
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.82)) {
+            mode = .password
+        }
+        show(message: message)
     }
 
     private func startCountdown() {
@@ -97,19 +198,26 @@ struct LoginView: View {
         }
     }
 
-    @MainActor
+    private func show(message: String) {
+        alertMessage = message
+        showAlert = true
+    }
+
     private func show(_ error: Error) {
         isSending = false
         isSubmitting = false
-        alertMessage = error.localizedDescription
-        showAlert = true
+        show(message: error.localizedDescription)
     }
 }
 
 struct RegisterView: View {
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var policy = AuthChannelPolicyStore.shared
+
+    let onExistingAccount: ((String) -> Void)?
 
     @State private var phone = ""
+    @State private var username = ""
     @State private var code = ""
     @State private var nickname = ""
     @State private var password = ""
@@ -121,14 +229,37 @@ struct RegisterView: View {
     @State private var showAlert = false
     @State private var alertMessage = ""
 
+    init(onExistingAccount: ((String) -> Void)? = nil) {
+        self.onExistingAccount = onExistingAccount
+    }
+
     var body: some View {
         AuthPage(title: "注册", subtitle: "创建你的整活局账号") {
-            AuthInputRow(icon: "iphone", placeholder: "请输入手机号", text: $phone, keyboard: .numberPad)
-                .onChange(of: phone) { phone = String($0.filter(\.isNumber).prefix(11)) }
-            AuthCodeRow(code: $code, cooldown: cooldown, isSending: isSending, action: sendCode)
+            AuthChannelBadge(policy: policy)
+
+            Group {
+                if policy.usesPasswordReserve {
+                    AuthInputRow(icon: "person.text.rectangle", placeholder: "设置用户名（4-20位字母、数字或下划线）", text: $username)
+                        .onChange(of: username) {
+                            username = String($0.filter {
+                                $0.unicodeScalars.allSatisfy { $0.isASCII } && ($0.isLetter || $0.isNumber || $0 == "_")
+                            }.prefix(20))
+                        }
+                    Text("短信名额即将用完，已启用账号密码应急注册。请记住用户名，后续可直接登录。")
+                        .font(.system(size: 12))
+                        .foregroundColor(.themeTextSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    AuthInputRow(icon: "iphone", placeholder: "请输入手机号", text: $phone, keyboard: .numberPad)
+                        .onChange(of: phone) { phone = String($0.filter(\.isNumber).prefix(11)) }
+                    AuthCodeRow(code: $code, cooldown: cooldown, isSending: isSending, action: sendCode)
+                }
+            }
+            .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
+
             AuthInputRow(icon: "person", placeholder: "请输入昵称（2-12字）", text: $nickname)
                 .onChange(of: nickname) { nickname = String($0.prefix(12)) }
-            AuthSecureRow(text: $password)
+            AuthSecureRow(text: $password, placeholder: "请设置密码（6-20位）")
                 .onChange(of: password) { password = String($0.prefix(20)) }
             agreement
             AuthPrimaryButton(title: isSubmitting ? "注册中..." : "注册", disabled: isSubmitting, action: submit)
@@ -141,10 +272,11 @@ struct RegisterView: View {
             }
             .font(.system(size: 15))
             .frame(maxWidth: .infinity)
-            .padding(.top, 14)
+            .padding(.top, 8)
         }
         .navigationBarBackButtonHidden(false)
-        .toast(isPresented: $showAlert, message: alertMessage)
+        .toast(isPresented: $showAlert, message: alertMessage, duration: 2.8)
+        .task { await policy.refresh() }
     }
 
     private var agreement: some View {
@@ -168,6 +300,7 @@ struct RegisterView: View {
 
     private func sendCode() {
         guard !isSending, cooldown == 0 else { return }
+        guard !policy.usesPasswordReserve else { return }
         isSending = true
         Task {
             do {
@@ -179,7 +312,18 @@ struct RegisterView: View {
                     startCountdown()
                 }
             } catch {
-                await show(error)
+                await MainActor.run {
+                    if error.accountServerCode == "ACCOUNT_EXISTS" {
+                        onExistingAccount?(phone)
+                        dismiss()
+                    } else if error.requestsPasswordFallback {
+                        policy.activatePasswordReserve(reason: error.localizedDescription)
+                        isSending = false
+                        show(message: "短信通道暂不可用，已自动切换到用户名密码应急注册。")
+                    } else {
+                        show(error)
+                    }
+                }
             }
         }
     }
@@ -189,20 +333,30 @@ struct RegisterView: View {
         isSubmitting = true
         Task {
             do {
-                let receipt = try await AccountService.shared.register(
-                    phone: phone,
-                    code: code,
-                    challengeId: challengeId,
-                    nickname: nickname.trimmingCharacters(in: .whitespacesAndNewlines),
-                    password: password,
-                    agreedToTerms: agreed
-                )
+                let receipt: AccountAuthReceipt
+                if policy.usesPasswordReserve {
+                    receipt = try await AccountService.shared.passwordReserveRegister(
+                        username: username,
+                        nickname: nickname.trimmingCharacters(in: .whitespacesAndNewlines),
+                        password: password,
+                        agreedToTerms: agreed
+                    )
+                } else {
+                    receipt = try await AccountService.shared.register(
+                        phone: phone,
+                        code: code,
+                        challengeId: challengeId,
+                        nickname: nickname.trimmingCharacters(in: .whitespacesAndNewlines),
+                        password: password,
+                        agreedToTerms: agreed
+                    )
+                }
                 await MainActor.run {
                     AccountSessionManager.shared.accept(receipt: receipt)
                     isSubmitting = false
                 }
             } catch {
-                await show(error)
+                await MainActor.run { show(error) }
             }
         }
     }
@@ -216,12 +370,74 @@ struct RegisterView: View {
         }
     }
 
-    @MainActor
+    private func show(message: String) {
+        alertMessage = message
+        showAlert = true
+    }
+
     private func show(_ error: Error) {
         isSending = false
         isSubmitting = false
-        alertMessage = error.localizedDescription
-        showAlert = true
+        show(message: error.localizedDescription)
+    }
+}
+
+private struct AuthChannelBadge: View {
+    @ObservedObject var policy: AuthChannelPolicyStore
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: policy.usesPasswordReserve ? "shield.lefthalf.filled" : "message.badge.filled.fill")
+                .foregroundColor(policy.usesPasswordReserve ? Color(hex: "8A63D2") : Color(hex: "E8AF16"))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(policy.usesPasswordReserve ? "账号密码应急通道已开启" : "短信验证通道正常")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(.themeTextMain)
+                Text(policy.usesPasswordReserve
+                     ? "新用户使用用户名注册，短信老用户使用手机号登录"
+                     : "剩余短信注册席位 \(policy.policy.smsRegistrationRemaining)")
+                    .font(.system(size: 11))
+                    .foregroundColor(.themeTextSecondary)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(Color.white.opacity(0.75))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.white.opacity(0.9), lineWidth: 1)
+        )
+    }
+}
+
+private struct AuthModePicker: View {
+    let mode: AuthLoginMode
+    let smsDisabled: Bool
+    let onSelect: (AuthLoginMode) -> Void
+
+    var body: some View {
+        HStack(spacing: 4) {
+            button(title: "验证码登录", value: .sms, disabled: smsDisabled)
+            button(title: "账号密码登录", value: .password, disabled: false)
+        }
+        .padding(4)
+        .background(Color(hex: "F0F1F5"))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private func button(title: String, value: AuthLoginMode, disabled: Bool) -> some View {
+        Button { onSelect(value) } label: {
+            Text(title)
+                .font(.system(size: 14, weight: mode == value ? .bold : .medium))
+                .foregroundColor(disabled ? .themeTextSecondary.opacity(0.55) : .themeTextMain)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 11)
+                .background(mode == value ? Color.white : Color.clear)
+                .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+                .shadow(color: mode == value ? .black.opacity(0.06) : .clear, radius: 6, y: 3)
+        }
     }
 }
 
@@ -229,6 +445,7 @@ private struct AuthPage<Content: View>: View {
     let title: String
     let subtitle: String
     let content: Content
+    @State private var animate = false
 
     init(title: String, subtitle: String, @ViewBuilder content: () -> Content) {
         self.title = title
@@ -237,42 +454,121 @@ private struct AuthPage<Content: View>: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                HStack(alignment: .bottom) {
-                    VStack(alignment: .leading, spacing: 9) {
-                        Text(title)
-                            .font(.system(size: 44, weight: .heavy))
-                        Text(subtitle)
-                            .font(.system(size: 17))
-                            .foregroundColor(.themeTextSecondary)
-                    }
-                    Spacer()
-                    Image.bundle("logo")
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: 88, height: 88)
-                        .clipShape(Circle())
-                        .overlay(Circle().stroke(Color.white, lineWidth: 5))
-                        .shadow(color: .black.opacity(0.08), radius: 8, y: 5)
-                }
-                .padding(.top, 54)
-                .padding(.bottom, 28)
+        ZStack {
+            AuthMotionBackdrop(animate: animate)
 
-                content
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 18) {
+                    HStack(alignment: .bottom) {
+                        VStack(alignment: .leading, spacing: 9) {
+                            Text(title)
+                                .font(.system(size: 44, weight: .heavy))
+                            Text(subtitle)
+                                .font(.system(size: 17))
+                                .foregroundColor(.themeTextSecondary)
+                        }
+                        Spacer()
+                        AuthFloatingLogo(animate: animate)
+                    }
+                    .padding(.top, 54)
+                    .padding(.bottom, 20)
+
+                    content
+                }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 40)
             }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 40)
         }
-        .background(
+        .toolbar(.hidden, for: .navigationBar)
+        .onAppear {
+            withAnimation(.easeInOut(duration: 4.8).repeatForever(autoreverses: true)) {
+                animate = true
+            }
+        }
+    }
+}
+
+private struct AuthMotionBackdrop: View {
+    let animate: Bool
+
+    var body: some View {
+        ZStack {
             LinearGradient(
                 colors: [Color.white, Color(hex: "FBFBFD"), Color(hex: "F7F8FA")],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
-            .ignoresSafeArea()
-        )
-        .toolbar(.hidden, for: .navigationBar)
+            Circle()
+                .fill(Color.themePrimary.opacity(0.17))
+                .frame(width: 260, height: 260)
+                .blur(radius: 34)
+                .offset(x: animate ? 170 : 110, y: animate ? -300 : -240)
+            Circle()
+                .fill(Color(hex: "BFA4FF").opacity(0.14))
+                .frame(width: 320, height: 320)
+                .blur(radius: 48)
+                .offset(x: animate ? -170 : -110, y: animate ? 330 : 250)
+            Circle()
+                .stroke(Color.themePrimary.opacity(0.13), lineWidth: 1.5)
+                .frame(width: animate ? 380 : 300, height: animate ? 380 : 300)
+                .offset(x: -180, y: -350)
+        }
+        .ignoresSafeArea()
+    }
+}
+
+private struct AuthFloatingLogo: View {
+    let animate: Bool
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(Color.themePrimary.opacity(0.25), lineWidth: 1.5)
+                .frame(width: animate ? 112 : 96, height: animate ? 112 : 96)
+            Circle()
+                .fill(Color.white.opacity(0.56))
+                .frame(width: 98, height: 98)
+            Image.bundle("logo")
+                .resizable()
+                .scaledToFill()
+                .frame(width: 82, height: 82)
+                .clipShape(Circle())
+                .overlay(Circle().stroke(Color.white, lineWidth: 4))
+        }
+        .offset(y: animate ? -8 : 3)
+        .shadow(color: Color.themePrimary.opacity(0.2), radius: 16, y: 8)
+    }
+}
+
+private struct AccountLaunchView: View {
+    @State private var animate = false
+
+    var body: some View {
+        VStack(spacing: 22) {
+            ZStack {
+                Circle()
+                    .stroke(Color.themePrimary.opacity(0.18), lineWidth: 2)
+                    .frame(width: animate ? 160 : 112, height: animate ? 160 : 112)
+                Circle()
+                    .trim(from: 0.05, to: 0.72)
+                    .stroke(Color.themePrimary, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                    .frame(width: 132, height: 132)
+                    .rotationEffect(.degrees(animate ? 360 : 0))
+                Image.bundle("logo")
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 88, height: 88)
+                    .clipShape(Circle())
+            }
+            Text("正在恢复你的整活现场")
+                .font(.system(size: 16, weight: .bold))
+                .foregroundColor(.themeTextMain)
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: false)) {
+                animate = true
+            }
+        }
     }
 }
 
@@ -318,15 +614,16 @@ private struct AuthCodeRow: View {
 
 private struct AuthSecureRow: View {
     @Binding var text: String
+    let placeholder: String
     @State private var visible = false
 
     var body: some View {
         HStack(spacing: 16) {
             AuthIcon(icon: "lock")
             if visible {
-                TextField("请设置密码（6-20位）", text: $text)
+                TextField(placeholder, text: $text)
             } else {
-                SecureField("请设置密码（6-20位）", text: $text)
+                SecureField(placeholder, text: $text)
             }
             Button { visible.toggle() } label: {
                 Image(systemName: visible ? "eye" : "eye.slash")
@@ -363,11 +660,12 @@ private struct AuthPrimaryButton: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: 58)
                 .background(Color.themePrimary)
-                .clipShape(RoundedRectangle(cornerRadius: 18))
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                 .shadow(color: Color.themePrimary.opacity(0.28), radius: 12, y: 6)
         }
         .disabled(disabled)
         .opacity(disabled ? 0.62 : 1)
+        .animation(.easeInOut(duration: 0.2), value: disabled)
     }
 }
 
@@ -375,8 +673,24 @@ private extension View {
     func authFieldStyle() -> some View {
         self.frame(height: 72)
             .padding(.horizontal, 16)
-            .background(Color.white.opacity(0.96))
-            .clipShape(RoundedRectangle(cornerRadius: 18))
+            .background(Color.white.opacity(0.92))
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(Color.white.opacity(0.92), lineWidth: 1)
+            )
             .shadow(color: .black.opacity(0.06), radius: 14, y: 6)
+    }
+}
+
+private extension Error {
+    var accountServerCode: String? {
+        guard let authError = self as? AccountAuthError,
+              case let .server(code, _) = authError else { return nil }
+        return code
+    }
+
+    var requestsPasswordFallback: Bool {
+        ["SMS_RATE_LIMITED", "SMS_NOT_CONFIGURED", "SMS_UPSTREAM_FAILED", "SMS_CAPACITY_LOW"].contains(accountServerCode)
     }
 }

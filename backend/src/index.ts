@@ -11,6 +11,8 @@ export interface Env {
     ALIYUN_SMS_SIGN_NAME?: string;
     ALIYUN_SMS_TEMPLATE_CODE?: string;
     ALIYUN_SMS_TEMPLATE_PARAM?: string;
+    SMS_REGISTRATION_LIMIT?: string;
+    SMS_FALLBACK_THRESHOLD?: string;
 }
 
 // Safe binding helpers: D1 throws D1_TYPE_ERROR if any bind value is undefined.
@@ -95,6 +97,8 @@ function isValidResultConfig(raw: string): boolean {
 
 const FREE_AI_LIMIT = 3;
 const VIP_AI_LIMIT = 50;
+const DEFAULT_SMS_REGISTRATION_LIMIT = 100;
+const DEFAULT_SMS_FALLBACK_THRESHOLD = 10;
 const DEFAULT_AI_MODEL = "@cf/meta/llama-3.1-8b-instruct-fast";
 const ALLOWED_AI_TONES = new Set(["default", "sharp", "cute", "absurd", "formal", "moments"]);
 const OPTIMIZED_COPY_KEYS = ["title", "subtitle", "evidence", "resultLevel", "quote", "finalComment"];
@@ -434,6 +438,20 @@ function isValidMainlandPhone(value: any): boolean {
     return /^1[3-9]\d{9}$/.test(normalizePhone(value));
 }
 
+function normalizeUsername(value: any): string {
+    return cleanText(value).toLowerCase();
+}
+
+function isValidUsername(value: any): boolean {
+    const username = normalizeUsername(value);
+    return /^[a-z0-9_]{4,20}$/.test(username);
+}
+
+function isValidPassword(value: any): boolean {
+    const password = s(value);
+    return password.length >= 6 && password.length <= 20;
+}
+
 function maskPhone(phone: string): string {
     return `${phone.slice(0, 3)}****${phone.slice(-4)}`;
 }
@@ -517,6 +535,9 @@ async function ensureAccountTables(env: Env): Promise<void> {
                 id TEXT PRIMARY KEY,
                 phone_hash TEXT NOT NULL UNIQUE,
                 phone_mask TEXT NOT NULL,
+                username_hash TEXT UNIQUE,
+                username_display TEXT NOT NULL DEFAULT '',
+                registration_channel TEXT NOT NULL DEFAULT 'sms',
                 nickname TEXT NOT NULL,
                 bio TEXT NOT NULL DEFAULT '',
                 avatar_url TEXT NOT NULL DEFAULT 'logo',
@@ -562,9 +583,20 @@ async function ensureAccountTables(env: Env): Promise<void> {
                 migrated_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         `),
+        env.DB.prepare(`
+            CREATE TABLE IF NOT EXISTS password_login_attempts (
+                id TEXT PRIMARY KEY,
+                username_hash TEXT NOT NULL,
+                ip_hash TEXT NOT NULL,
+                success INTEGER NOT NULL DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        `),
         env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_account_sessions_token ON account_sessions(token_hash, expires_at)'),
         env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_sms_requests_phone_created ON sms_requests(phone_hash, created_at)'),
         env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_sms_requests_ip_created ON sms_requests(ip_hash, created_at)'),
+        env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_password_login_username_created ON password_login_attempts(username_hash, created_at)'),
+        env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_password_login_ip_created ON password_login_attempts(ip_hash, created_at)'),
     ]);
 }
 
@@ -575,6 +607,7 @@ function accountProfile(row: any): any {
         id: s(row?.id),
         displayId: s(row?.id).replace(/-/g, '').slice(-8).toUpperCase(),
         phoneMasked: s(row?.phone_mask),
+        username: s(row?.username_display),
         nickname: s(row?.nickname, '整活新人'),
         bio: s(row?.bio),
         avatar: s(row?.avatar_url, 'logo'),
@@ -582,6 +615,45 @@ function accountProfile(row: any): any {
         vipPlan: s(row?.vip_plan),
         vipUntil,
     };
+}
+
+function smsRegistrationLimit(env: Env): number {
+    return Math.max(1, Math.min(100000, n(env.SMS_REGISTRATION_LIMIT, DEFAULT_SMS_REGISTRATION_LIMIT)));
+}
+
+function smsFallbackThreshold(env: Env): number {
+    return Math.max(0, Math.min(smsRegistrationLimit(env), n(env.SMS_FALLBACK_THRESHOLD, DEFAULT_SMS_FALLBACK_THRESHOLD)));
+}
+
+async function getAuthChannelPolicy(env: Env): Promise<any> {
+    await ensureAccountTables(env);
+    const used = n(await env.DB.prepare(
+        "SELECT COUNT(*) AS c FROM accounts WHERE registration_channel = 'sms'"
+    ).first('c'));
+    const limit = smsRegistrationLimit(env);
+    const remaining = Math.max(0, limit - used);
+    const threshold = smsFallbackThreshold(env);
+    const usePasswordReserve = remaining < threshold;
+    return {
+        mode: usePasswordReserve ? 'password' : 'sms',
+        smsRegistrationLimit: limit,
+        smsRegistrationUsed: used,
+        smsRegistrationRemaining: remaining,
+        fallbackThreshold: threshold,
+        usernameHint: '短信注册用户可直接使用手机号作为用户名登录',
+    };
+}
+
+async function secureStringEquals(left: string, right: string): Promise<boolean> {
+    const encoder = new TextEncoder();
+    const leftBytes = encoder.encode(left);
+    const rightBytes = encoder.encode(right);
+    if (leftBytes.length !== rightBytes.length) return false;
+    let difference = 0;
+    for (let index = 0; index < leftBytes.length; index += 1) {
+        difference |= leftBytes[index] ^ rightBytes[index];
+    }
+    return difference === 0;
 }
 
 async function getAccount(env: Env, userId: string): Promise<any | null> {
@@ -721,6 +793,10 @@ export default {
             // ---- PUBLIC ENDPOINTS ----
 
             // 1. Phone Account Authentication
+            if (path === "/api/auth/channel-policy" && method === "GET") {
+                return Response.json(await getAuthChannelPolicy(env), { headers: corsHeaders });
+            }
+
             if (path === "/api/auth/sms/send" && method === "POST") {
                 await ensureAccountTables(env);
                 const body: any = await request.json();
@@ -732,7 +808,16 @@ export default {
                 }
                 if (!env.AUTH_HASH_PEPPER || !env.ALIYUN_ACCESS_KEY_ID || !env.ALIYUN_ACCESS_KEY_SECRET ||
                     !env.ALIYUN_SMS_SIGN_NAME || !env.ALIYUN_SMS_TEMPLATE_CODE) {
-                    return Response.json({ error: 'SMS service is not configured', code: 'SMS_NOT_CONFIGURED' }, { status: 503, headers: corsHeaders });
+                    return Response.json({ error: 'SMS service is not configured', code: 'SMS_NOT_CONFIGURED', fallbackMode: 'password' }, { status: 503, headers: corsHeaders });
+                }
+                const policy = await getAuthChannelPolicy(env);
+                if (policy.mode === 'password') {
+                    return Response.json({
+                        error: 'SMS registration reserve is active',
+                        code: 'SMS_CAPACITY_LOW',
+                        fallbackMode: 'password',
+                        policy,
+                    }, { status: 503, headers: corsHeaders });
                 }
                 const pepper = env.AUTH_HASH_PEPPER;
                 const phoneHash = await secureHash(phone, pepper);
@@ -751,7 +836,7 @@ export default {
                 const hourlyClient = n(await env.DB.prepare("SELECT COUNT(*) AS c FROM sms_requests WHERE client_hash = ? AND created_at >= datetime('now', '-1 hour')").bind(clientHash).first('c'));
                 const globalTenMinutes = n(await env.DB.prepare("SELECT COUNT(*) AS c FROM sms_requests WHERE created_at >= datetime('now', '-10 minutes')").first('c'));
                 if (recentPhone >= 1 || dailyPhone >= 8 || hourlyIP >= 20 || hourlyClient >= 8 || globalTenMinutes >= 300) {
-                    return Response.json({ error: 'Too many SMS requests', code: 'SMS_RATE_LIMITED' }, { status: 429, headers: corsHeaders });
+                    return Response.json({ error: 'Too many SMS requests', code: 'SMS_RATE_LIMITED', fallbackMode: 'password' }, { status: 429, headers: corsHeaders });
                 }
                 const challengeId = crypto.randomUUID();
                 await env.DB.prepare(`
@@ -791,6 +876,7 @@ export default {
                     return Response.json({
                         error: 'SMS service is temporarily unavailable',
                         code: 'SMS_UPSTREAM_FAILED',
+                        fallbackMode: 'password',
                         providerCode,
                         providerMessage,
                     }, { status: 502, headers: corsHeaders });
@@ -835,14 +921,88 @@ export default {
                     const userId = crypto.randomUUID();
                     const salt = randomToken().slice(0, 32);
                     await env.DB.prepare(`
-                        INSERT INTO accounts (id, phone_hash, phone_mask, nickname, bio, avatar_url, password_hash, password_salt, accepted_terms_at)
-                        VALUES (?, ?, ?, ?, '', 'logo', ?, ?, CURRENT_TIMESTAMP)
-                    `).bind(userId, phoneHash, maskPhone(phone), nickname, await hashPassword(password, salt), salt).run();
+                        INSERT INTO accounts (
+                            id, phone_hash, phone_mask, username_hash, username_display, registration_channel,
+                            nickname, bio, avatar_url, password_hash, password_salt, accepted_terms_at
+                        )
+                        VALUES (?, ?, ?, ?, ?, 'sms', ?, '', 'logo', ?, ?, CURRENT_TIMESTAMP)
+                    `).bind(userId, phoneHash, maskPhone(phone), phoneHash, phone, nickname, await hashPassword(password, salt), salt).run();
                     await transferLegacyIdentity(env, userId, body.legacyUserId, body.legacyInstallToken);
                     account = await getAccount(env, userId);
                 } else {
                     account = await env.DB.prepare("SELECT * FROM accounts WHERE phone_hash = ? AND status = 'active'").bind(phoneHash).first();
                     if (!account) return Response.json({ error: 'Account does not exist', code: 'ACCOUNT_NOT_FOUND' }, { status: 404, headers: corsHeaders });
+                }
+                const token = await createAccountSession(env, s(account.id));
+                return Response.json({ token, profile: accountProfile(await getAccount(env, s(account.id))) }, { headers: corsHeaders });
+            }
+
+            if (path === "/api/auth/password/register" && method === "POST") {
+                await ensureAccountTables(env);
+                if (!env.AUTH_HASH_PEPPER) {
+                    return Response.json({ error: 'Authentication service is not configured', code: 'AUTH_NOT_CONFIGURED' }, { status: 503, headers: corsHeaders });
+                }
+                const policy = await getAuthChannelPolicy(env);
+                if (policy.mode !== 'password') {
+                    return Response.json({ error: 'SMS registration is still available', code: 'PASSWORD_RESERVE_NOT_ACTIVE', policy }, { status: 409, headers: corsHeaders });
+                }
+                const body: any = await request.json();
+                const username = normalizeUsername(body.username);
+                const nickname = cleanText(body.nickname);
+                const password = s(body.password);
+                if (!body.agreedToTerms || !isValidUsername(username) || isValidMainlandPhone(username) ||
+                    nickname.length < 2 || nickname.length > 12 || containsUnsafeText(nickname) || !isValidPassword(password)) {
+                    return Response.json({ error: 'Invalid registration fields', code: 'REGISTER_INVALID_FIELDS' }, { status: 400, headers: corsHeaders });
+                }
+                const usernameHash = await secureHash(username, env.AUTH_HASH_PEPPER);
+                if (await env.DB.prepare('SELECT id FROM accounts WHERE username_hash = ?').bind(usernameHash).first()) {
+                    return Response.json({ error: 'Username is already registered', code: 'USERNAME_EXISTS' }, { status: 409, headers: corsHeaders });
+                }
+                const userId = crypto.randomUUID();
+                const salt = randomToken().slice(0, 32);
+                const reservePhoneHash = await secureHash(`reserve:${username}`, env.AUTH_HASH_PEPPER);
+                await env.DB.prepare(`
+                    INSERT INTO accounts (
+                        id, phone_hash, phone_mask, username_hash, username_display, registration_channel,
+                        nickname, bio, avatar_url, password_hash, password_salt, accepted_terms_at
+                    )
+                    VALUES (?, ?, '', ?, ?, 'password', ?, '', 'logo', ?, ?, CURRENT_TIMESTAMP)
+                `).bind(userId, reservePhoneHash, usernameHash, username, nickname, await hashPassword(password, salt), salt).run();
+                await transferLegacyIdentity(env, userId, body.legacyUserId, body.legacyInstallToken);
+                const token = await createAccountSession(env, userId);
+                return Response.json({ token, profile: accountProfile(await getAccount(env, userId)) }, { headers: corsHeaders });
+            }
+
+            if (path === "/api/auth/password/login" && method === "POST") {
+                await ensureAccountTables(env);
+                if (!env.AUTH_HASH_PEPPER) {
+                    return Response.json({ error: 'Authentication service is not configured', code: 'AUTH_NOT_CONFIGURED' }, { status: 503, headers: corsHeaders });
+                }
+                const body: any = await request.json();
+                const username = normalizeUsername(body.username);
+                const password = s(body.password);
+                if ((!isValidUsername(username) && !isValidMainlandPhone(username)) || !isValidPassword(password)) {
+                    return Response.json({ error: 'Invalid username or password', code: 'PASSWORD_INVALID' }, { status: 400, headers: corsHeaders });
+                }
+                const usernameHash = await secureHash(username, env.AUTH_HASH_PEPPER);
+                const ipHash = await secureHash(request.headers.get('CF-Connecting-IP') || 'unknown', env.AUTH_HASH_PEPPER);
+                const usernameFailures = n(await env.DB.prepare(
+                    "SELECT COUNT(*) AS c FROM password_login_attempts WHERE username_hash = ? AND success = 0 AND created_at >= datetime('now', '-15 minutes')"
+                ).bind(usernameHash).first('c'));
+                const ipFailures = n(await env.DB.prepare(
+                    "SELECT COUNT(*) AS c FROM password_login_attempts WHERE ip_hash = ? AND success = 0 AND created_at >= datetime('now', '-15 minutes')"
+                ).bind(ipHash).first('c'));
+                if (usernameFailures >= 5 || ipFailures >= 20) {
+                    return Response.json({ error: 'Too many password attempts', code: 'AUTH_RATE_LIMITED' }, { status: 429, headers: corsHeaders });
+                }
+                const account: any = await env.DB.prepare("SELECT * FROM accounts WHERE username_hash = ? AND status = 'active'").bind(usernameHash).first();
+                const matched = !!account && await secureStringEquals(await hashPassword(password, s(account.password_salt)), s(account.password_hash));
+                await env.DB.prepare(`
+                    INSERT INTO password_login_attempts (id, username_hash, ip_hash, success)
+                    VALUES (?, ?, ?, ?)
+                `).bind(crypto.randomUUID(), usernameHash, ipHash, matched ? 1 : 0).run();
+                if (!matched) {
+                    return Response.json({ error: 'Invalid username or password', code: 'PASSWORD_INVALID' }, { status: 401, headers: corsHeaders });
                 }
                 const token = await createAccountSession(env, s(account.id));
                 return Response.json({ token, profile: accountProfile(await getAccount(env, s(account.id))) }, { headers: corsHeaders });
@@ -994,8 +1154,8 @@ export default {
                 const account = await getAccount(env, safeUserId);
                 if (!account) return Response.json({ error: 'Account login required', code: 'ACCOUNT_LOGIN_REQUIRED' }, { status: 401, headers: corsHeaders });
                 await env.DB.batch([
-                    env.DB.prepare("UPDATE accounts SET status = 'deleted', phone_hash = ?, phone_mask = '', nickname = '已注销用户', bio = '', avatar_url = 'logo', password_hash = ?, password_salt = ?, vip_until = NULL, vip_plan = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
-                        .bind(`deleted:${safeUserId}:${Date.now()}`, randomToken(), randomToken(), safeUserId),
+                    env.DB.prepare("UPDATE accounts SET status = 'deleted', phone_hash = ?, phone_mask = '', username_hash = ?, username_display = '', nickname = '已注销用户', bio = '', avatar_url = 'logo', password_hash = ?, password_salt = ?, vip_until = NULL, vip_plan = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+                        .bind(`deleted:${safeUserId}:${Date.now()}`, `deleted:${safeUserId}:${Date.now()}`, randomToken(), randomToken(), safeUserId),
                     env.DB.prepare('UPDATE account_sessions SET revoked_at = CURRENT_TIMESTAMP WHERE user_id = ?').bind(safeUserId),
                     env.DB.prepare("UPDATE templates SET status = 'hidden', author_name = '已注销用户' WHERE author_id = ?").bind(safeUserId),
                     env.DB.prepare("UPDATE works SET author_name = '已注销用户', author_avatar = 'logo' WHERE author_id = ?").bind(safeUserId),
@@ -1190,7 +1350,6 @@ stats 为 2 到 4 个短指标名称；evidencePool 为至少 3 条轻松证据�
             if (path === "/api/templates" && method === "POST") {
                 try {
                     const body: any = await request.json();
-                    console.log("Creating template - raw body:", JSON.stringify(body));
                     const formConfigRaw = serializeConfig(body.formConfigRaw, body.formConfig);
                     const resultConfigRaw = serializeConfig(body.resultConfigRaw, body.resultConfig);
 
@@ -1201,8 +1360,7 @@ stats 为 2 到 4 个短指标名称；evidencePool 为至少 3 条轻松证据�
                         !isValidResultConfig(resultConfigRaw)) {
                         return Response.json({
                             error: "Invalid required fields",
-                            details: "id, title, description, form config, or result config is invalid",
-                            received: { id: body.id, title: body.title }
+                            details: "id, title, description, form config, or result config is invalid"
                         }, { status: 400, headers: corsHeaders });
                     }
 
@@ -1227,8 +1385,6 @@ stats 为 2 到 4 个短指标名称；evidencePool 为至少 3 条轻松证据�
                     console.error("Failed to create template:", err);
                     return Response.json({
                         error: "Failed to create template",
-                        details: err.message,
-                        stack: err.stack,
                         code: "TEMPLATE_CREATE_FAILED"
                     }, { status: 500, headers: corsHeaders });
                 }
@@ -1264,7 +1420,6 @@ stats 为 2 到 4 个短指标名称；evidencePool 为至少 3 条轻松证据�
                     console.error("Failed to update template:", err);
                     return Response.json({
                         error: "Failed to update template",
-                        details: err.message,
                         code: "TEMPLATE_UPDATE_FAILED"
                     }, { status: 500, headers: corsHeaders });
                 }
@@ -1282,9 +1437,6 @@ stats 为 2 到 4 个短指标名称；evidencePool 为至少 3 条轻松证据�
             if (path === "/api/works" && method === "POST") {
                 try {
                     const body: any = await request.json();
-                    console.log("Publishing work - raw body:", JSON.stringify(body));
-                    console.log("Publishing work - userId from auth:", safeUserId);
-
                     // Validate required fields
                     if (!isTextWithin(body.id, 128) ||
                         !isTextWithin(body.templateId, 128) ||
@@ -1293,13 +1445,7 @@ stats 为 2 到 4 个短指标名称；evidencePool 为至少 3 条轻松证据�
                         !isTextWithin(body.imageUrl, 2048)) {
                         return Response.json({
                             error: "Invalid required fields",
-                            details: "id, templateId, title (1-36), description (0-160), and imageUrl are required",
-                            received: {
-                                id: body.id,
-                                templateId: body.templateId,
-                                title: body.title,
-                                imageUrl: body.imageUrl
-                            }
+                            details: "id, templateId, title (1-36), description (0-160), and imageUrl are required"
                         }, { status: 400, headers: corsHeaders });
                     }
 
@@ -1321,8 +1467,6 @@ stats 为 2 到 4 个短指标名称；evidencePool 为至少 3 条轻松证据�
                     workData.authorName = author.nickname;
                     workData.authorAvatar = author.avatar;
 
-                    console.log("Publishing work - processed data:", JSON.stringify(workData));
-
                     await env.DB.prepare(`
                         INSERT INTO works (id, template_id, title, description, is_anonymous, author_id, author_name, author_avatar, tags, category, image_url, like_count)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
@@ -1341,8 +1485,6 @@ stats 为 2 到 4 个短指标名称；evidencePool 为至少 3 条轻松证据�
                     console.error("Failed to publish work:", err);
                     return Response.json({
                         error: "Failed to publish work",
-                        details: err.message,
-                        stack: err.stack,
                         code: "PUBLISH_FAILED"
                     }, { status: 500, headers: corsHeaders });
                 }
@@ -1422,7 +1564,6 @@ stats 为 2 到 4 个短指标名称；evidencePool 为至少 3 条轻松证据�
                     console.error("Failed to upload image:", err);
                     return Response.json({
                         error: "Failed to upload image",
-                        details: err.message,
                         code: "UPLOAD_FAILED"
                     }, { status: 500, headers: corsHeaders });
                 }
@@ -1431,10 +1572,15 @@ stats 为 2 到 4 个短指标名称；evidencePool 为至少 3 条轻松证据�
             return Response.json({ error: "Not found" }, { status: 404, headers: corsHeaders });
         } catch (e: any) {
             console.error("API Error:", e);
+            if (e instanceof SyntaxError) {
+                return Response.json({
+                    error: "Invalid JSON body",
+                    code: "INVALID_JSON"
+                }, { status: 400, headers: corsHeaders });
+            }
             return Response.json({
-                error: e.message || "Internal server error",
-                details: e.stack || "",
-                timestamp: new Date().toISOString()
+                error: "Internal server error",
+                code: "API_INTERNAL_ERROR"
             }, { status: 500, headers: corsHeaders });
         }
     },

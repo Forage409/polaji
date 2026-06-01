@@ -11,6 +11,7 @@ struct ZhengHuoJuApp: App {
                     guard phase == .active else { return }
                     AppNotificationManager.shared.refresh()
                     Task {
+                        await AuthChannelPolicyStore.shared.refresh()
                         await AppNotificationManager.shared.checkForNewTemplates()
                         await TemplateCatalogStore.shared.refresh()
                         try? await PublicWorksFeedStore.shared.refresh()
