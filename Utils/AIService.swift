@@ -56,6 +56,7 @@ enum AIServiceError: LocalizedError {
     case quotaExceeded
     case vipRequired
     case requestReplay
+    case ugcRejected(String)
     case invalidResponse
     case unavailable
     case requestFailed(String)
@@ -65,6 +66,7 @@ enum AIServiceError: LocalizedError {
         case .quotaExceeded: return "今日 AI 次数已用完，开通 VIP 可获得更多次数。"
         case .vipRequired: return "这项 AI 能力为 VIP 专属。"
         case .requestReplay: return "本次请求已处理，请勿重复提交。"
+        case .ugcRejected(let reason): return reason
         case .invalidResponse: return "AI 返回内容不完整，请稍后重试。"
         case .unavailable: return "AI 服务暂时不可用，请稍后重试。"
         case .requestFailed(let message): return message
@@ -102,12 +104,25 @@ final class AIService {
         return try await perform(request)
     }
 
-    func generateTemplateCopy(title: String, category: String, tone: AITone) async throws -> AITemplateCopyReceipt {
+    func generateTemplateCopy(title: String, description: String, category: String, fields: [TemplateField], tone: AITone) async throws -> AITemplateCopyReceipt {
+        let fieldPayload: [[String: Any]] = fields.map { field in
+            [
+                "label": field.label,
+                "type": field.type.rawValue,
+                "placeholder": field.placeholder,
+                "options": field.options,
+                "minCount": field.minCount ?? 0,
+                "maxCount": field.maxCount ?? 0,
+            ]
+        }
         let payload: [String: Any] = [
             "requestId": UUID().uuidString,
             "templateTitle": title,
+            "templateDescription": description,
             "category": category,
-            "tone": tone.rawValue
+            "tone": tone.rawValue,
+            "workflow": "参与者依次填写编排字段，提交后生成可分享的结果海报。",
+            "fields": fieldPayload,
         ]
         let body = try JSONSerialization.data(withJSONObject: payload)
         let request = try APIClient.shared.createRequest(path: "/api/ai/generate-template-copy", method: "POST", body: body)
@@ -129,6 +144,8 @@ final class AIService {
         case "AI_QUOTA_EXCEEDED": throw AIServiceError.quotaExceeded
         case "VIP_REQUIRED": throw AIServiceError.vipRequired
         case "AI_REQUEST_REPLAY": throw AIServiceError.requestReplay
+        case "AI_UGC_REJECTED":
+            throw AIServiceError.ugcRejected((body?["reason"] as? String) ?? "玩法内容不适合生成，请修改后重试。")
         case "AI_INVALID_RESPONSE": throw AIServiceError.invalidResponse
         case "AI_UPSTREAM_FAILED": throw AIServiceError.unavailable
         default:

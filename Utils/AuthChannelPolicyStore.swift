@@ -14,12 +14,12 @@ final class AuthChannelPolicyStore: ObservableObject {
         usernameHint: "短信注册用户可直接使用手机号作为用户名登录"
     )
     @Published private(set) var isRefreshing = false
-    @Published private(set) var localFallbackReason = ""
+    @Published private(set) var hasResolvedPolicy = false
 
     private init() {}
 
     var usesPasswordReserve: Bool {
-        policy.usesPasswordReserve || !localFallbackReason.isEmpty
+        policy.usesPasswordReserve
     }
 
     func refresh() async {
@@ -28,17 +28,9 @@ final class AuthChannelPolicyStore: ObservableObject {
         defer { isRefreshing = false }
         do {
             policy = try await AccountService.shared.fetchChannelPolicy()
-            if policy.usesPasswordReserve {
-                localFallbackReason = "短信注册席位即将用完"
-            } else {
-                localFallbackReason = ""
-            }
         } catch {
             // A temporary status request failure should not block entry.
         }
-    }
-
-    func activatePasswordReserve(reason: String) {
-        localFallbackReason = reason
+        hasResolvedPolicy = true
     }
 }

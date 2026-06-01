@@ -60,9 +60,9 @@ enum AccountAuthError: LocalizedError {
         case .unavailable: return "网络繁忙，请稍后重试。"
         case .server(let code, let message):
             switch code {
-            case "SMS_RATE_LIMITED": return "验证码发送过于频繁，已为你切换到账号密码登录。"
-            case "SMS_NOT_CONFIGURED": return "短信服务暂不可用，已为你切换到账号密码登录。"
-            case "SMS_UPSTREAM_FAILED": return "验证码服务暂不可用，已为你切换到账号密码登录。"
+            case "SMS_RATE_LIMITED": return "验证码发送过于频繁，请稍后再试。"
+            case "SMS_NOT_CONFIGURED": return "短信服务暂不可用，请稍后再试。"
+            case "SMS_UPSTREAM_FAILED": return "验证码服务暂不可用，请稍后再试。"
             case "SMS_CAPACITY_LOW": return "短信注册名额即将用完，已启用账号密码应急通道。"
             case "SMS_CODE_INVALID": return "验证码错误或已过期。"
             case "ACCOUNT_EXISTS": return "该手机号已经注册。用户名就是手机号，请直接使用密码登录。"

@@ -6,6 +6,7 @@ struct AITemplateCopySheet: View {
 
     @State private var tone: AITone = .moments
     @State private var receipt: AITemplateCopyReceipt?
+    @State private var rejectionReason: String?
     @State private var isLoading = false
     @State private var alertMessage = ""
     @State private var showAlert = false
@@ -18,20 +19,24 @@ struct AITemplateCopySheet: View {
                         .font(.system(size: 13))
                         .foregroundColor(.themeTextSecondary)
 
-                    Picker("语气", selection: $tone) {
-                        ForEach(AITone.allCases) { item in
-                            Text(item.displayName).tag(item)
+                    if let rejectionReason {
+                        rejectionCard(reason: rejectionReason)
+                    } else {
+                        Picker("语气", selection: $tone) {
+                            ForEach(AITone.allCases) { item in
+                                Text(item.displayName).tag(item)
+                            }
                         }
+                        .pickerStyle(.menu)
+                        .padding(12)
+                        .background(Color.white)
+                        .cornerRadius(12)
                     }
-                    .pickerStyle(.menu)
-                    .padding(12)
-                    .background(Color.white)
-                    .cornerRadius(12)
 
                     Button(action: generate) {
                         HStack {
                             if isLoading { ProgressView().scaleEffect(0.8) }
-                            Text(isLoading ? "AI 正在构思..." : (receipt == nil ? "生成玩法文案库" : "重新生成一套"))
+                            Text(isLoading ? "AI 正在审核并构思..." : (receipt == nil ? "生成玩法文案库" : "重新生成一套"))
                         }
                         .font(.system(size: 15, weight: .bold))
                         .foregroundColor(.themeTextMain)
@@ -82,6 +87,38 @@ struct AITemplateCopySheet: View {
         }
     }
 
+    private func rejectionCard(reason: String) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Image(systemName: "shield.slash.fill")
+                    .font(.system(size: 24))
+                    .foregroundColor(.red)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("暂时无法生成")
+                        .font(.system(size: 16, weight: .heavy))
+                    Text("玩法内容未通过安全检查")
+                        .font(.system(size: 12))
+                        .foregroundColor(.themeTextSecondary)
+                }
+            }
+            Text(reason)
+                .font(.system(size: 13))
+                .foregroundColor(.themeTextMain)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("请返回修改玩法名称、描述或填写项后再试。")
+                .font(.system(size: 12))
+                .foregroundColor(.themeTextSecondary)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.red.opacity(0.08))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Color.red.opacity(0.18), lineWidth: 1)
+        )
+        .cornerRadius(14)
+    }
+
     private func preview(title: String, values: [String]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
@@ -105,10 +142,18 @@ struct AITemplateCopySheet: View {
             showAlert = true
             return
         }
+        rejectionReason = nil
+        receipt = nil
         isLoading = true
         Task {
             do {
-                let generated = try await AIService.shared.generateTemplateCopy(title: title, category: draft.category, tone: tone)
+                let generated = try await AIService.shared.generateTemplateCopy(
+                    title: title,
+                    description: draft.description.trimmingCharacters(in: .whitespacesAndNewlines),
+                    category: draft.category,
+                    fields: draft.fields,
+                    tone: tone
+                )
                 await MainActor.run {
                     receipt = generated
                     isLoading = false
@@ -116,8 +161,13 @@ struct AITemplateCopySheet: View {
             } catch {
                 await MainActor.run {
                     isLoading = false
-                    alertMessage = error.localizedDescription
-                    showAlert = true
+                    if let serviceError = error as? AIServiceError,
+                       case let .ugcRejected(reason) = serviceError {
+                        rejectionReason = reason
+                    } else {
+                        alertMessage = error.localizedDescription
+                        showAlert = true
+                    }
                 }
             }
         }

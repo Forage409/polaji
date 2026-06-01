@@ -32,6 +32,13 @@ function cleanText(value: any): string {
     return s(value).trim();
 }
 
+function databaseTimeToISO(value: any): string {
+    const text = s(value);
+    return /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(text)
+        ? `${text.replace(' ', 'T')}Z`
+        : text;
+}
+
 function isTextWithin(value: any, maxLength: number, allowEmpty: boolean = false): boolean {
     const text = cleanText(value);
     return (allowEmpty || text.length > 0) && text.length <= maxLength;
@@ -61,15 +68,15 @@ function isValidTemplateFormConfig(raw: string): boolean {
         for (const field of fields) {
             const label = cleanText(field?.label);
             const type = s(field?.type);
-            if (!label || label.length > 12 || labels.has(label)) return false;
+            if (!label || label.length > 12 || labels.has(label) || containsUnsafeText(label)) return false;
             labels.add(label);
             if (!['text', 'number', 'singleSelect', 'multiSelect', 'participants'].includes(type)) return false;
-            if (s(field?.placeholder).length > 30) return false;
+            if (s(field?.placeholder).length > 30 || containsUnsafeText(s(field?.placeholder))) return false;
 
             if (type === 'singleSelect' || type === 'multiSelect') {
                 if (!Array.isArray(field?.options) || field.options.length < 2 || field.options.length > 8) return false;
                 const options = field.options.map((option: any) => cleanText(option));
-                if (options.some((option: string) => !option || option.length > 16)) return false;
+                if (options.some((option: string) => !option || option.length > 16 || containsUnsafeText(option))) return false;
                 if (new Set(options).size !== options.length) return false;
             }
 
@@ -103,6 +110,7 @@ const DEFAULT_AI_MODEL = "@cf/meta/llama-3.1-8b-instruct-fast";
 const ALLOWED_AI_TONES = new Set(["default", "sharp", "cute", "absurd", "formal", "moments"]);
 const OPTIMIZED_COPY_KEYS = ["title", "subtitle", "evidence", "resultLevel", "quote", "finalComment"];
 const TEMPLATE_COPY_KEYS = ["stats", "evidencePool", "finalPool", "levels"];
+const UGC_REVIEW_KEYS = ["allowed", "reason", "riskTags"];
 
 const OPTIMIZED_COPY_SCHEMA = {
     type: "object",
@@ -153,6 +161,21 @@ const TEMPLATE_COPY_SCHEMA = {
         },
     },
     required: TEMPLATE_COPY_KEYS,
+};
+
+const UGC_REVIEW_SCHEMA = {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+        allowed: { type: "boolean" },
+        reason: { type: "string", maxLength: 60 },
+        riskTags: {
+            type: "array",
+            maxItems: 4,
+            items: { type: "string", minLength: 1, maxLength: 16 },
+        },
+    },
+    required: UGC_REVIEW_KEYS,
 };
 
 type AIQuotaStatus = {
@@ -243,7 +266,7 @@ async function getAIQuotaStatus(request: Request, env: Env, userId: string): Pro
     const used = n(await env.DB.prepare(`
         SELECT COUNT(*) AS c FROM ai_usage
         WHERE user_id = ?
-          AND status IN ('pending', 'succeeded')
+          AND status IN ('pending', 'succeeded', 'rejected')
           AND created_at >= datetime('now', '-24 hours')
     `).bind(userId).first("c"));
     return { isVip, limit, used, remaining: Math.max(0, limit - used), window: "rolling_24h" };
@@ -259,7 +282,7 @@ async function reserveAIUsage(env: Env, requestId: string, userId: string, featu
     return true;
 }
 
-async function finishAIUsage(env: Env, requestId: string, status: "succeeded" | "failed"): Promise<void> {
+async function finishAIUsage(env: Env, requestId: string, status: "succeeded" | "failed" | "rejected"): Promise<void> {
     await env.DB.prepare("UPDATE ai_usage SET status = ? WHERE id = ?").bind(status, requestId).run();
 }
 
@@ -288,6 +311,27 @@ function sanitizeResultDocument(value: any): Record<string, any> {
         quote: safePromptText(doc.quote, 72),
         finalComment: safePromptText(doc.finalComment, 100),
     };
+}
+
+function sanitizeTemplateFields(value: any): Record<string, any>[] {
+    if (!Array.isArray(value)) return [];
+    return value.slice(0, 8).map((field: any) => ({
+        label: safeText(field?.label, 12),
+        type: safeText(field?.type, 20),
+        placeholder: safeText(field?.placeholder, 30),
+        options: safeTextArray(field?.options, 8, 16),
+        minCount: Math.max(0, Math.min(12, n(field?.minCount))),
+        maxCount: Math.max(0, Math.min(12, n(field?.maxCount))),
+    }));
+}
+
+function validateUGCReview(value: any): { allowed: boolean; reason: string; riskTags: string[] } | null {
+    if (!value || typeof value !== "object" || Array.isArray(value) || !hasExactKeys(value, UGC_REVIEW_KEYS)) return null;
+    if (typeof value.allowed !== "boolean" || typeof value.reason !== "string") return null;
+    const reason = value.reason.trim().slice(0, 60);
+    const riskTags = safeTextArray(value.riskTags, 4, 16);
+    if (!value.allowed && !reason) return null;
+    return { allowed: value.allowed, reason, riskTags };
 }
 
 function validateOptimizedCopy(value: any): any | null {
@@ -363,8 +407,8 @@ function mapTemplate(row: any, origin: string = ''): any {
         likeCount: n(row.like_count),
         reportCount: n(row.report_count),
         status: s(row.status, 'draft'),
-        createdAt: s(row.created_at),
-        updatedAt: s(row.updated_at || row.created_at),
+        createdAt: databaseTimeToISO(row.created_at),
+        updatedAt: databaseTimeToISO(row.updated_at || row.created_at),
         formConfigRaw: row.form_config_raw ?? null,
         resultConfigRaw: row.result_config_raw ?? null,
     };
@@ -394,7 +438,7 @@ function mapWork(row: any, origin: string = '', revealAuthor: boolean = false): 
         tags,
         likeCount: n(row.like_count),
         reportCount: n(row.report_count),
-        createdAt: s(row.created_at),
+        createdAt: databaseTimeToISO(row.created_at),
     };
 }
 
@@ -811,7 +855,7 @@ export default {
                     return Response.json({ error: 'SMS service is not configured', code: 'SMS_NOT_CONFIGURED', fallbackMode: 'password' }, { status: 503, headers: corsHeaders });
                 }
                 const policy = await getAuthChannelPolicy(env);
-                if (policy.mode === 'password') {
+                if (purpose === 'register' && policy.mode === 'password') {
                     return Response.json({
                         error: 'SMS registration reserve is active',
                         code: 'SMS_CAPACITY_LOW',
@@ -830,11 +874,11 @@ export default {
                         code: purpose === 'register' ? 'ACCOUNT_EXISTS' : 'ACCOUNT_NOT_FOUND',
                     }, { status: 409, headers: corsHeaders });
                 }
-                const recentPhone = n(await env.DB.prepare("SELECT COUNT(*) AS c FROM sms_requests WHERE phone_hash = ? AND created_at >= datetime('now', '-60 seconds')").bind(phoneHash).first('c'));
-                const dailyPhone = n(await env.DB.prepare("SELECT COUNT(*) AS c FROM sms_requests WHERE phone_hash = ? AND created_at >= datetime('now', '-24 hours')").bind(phoneHash).first('c'));
-                const hourlyIP = n(await env.DB.prepare("SELECT COUNT(*) AS c FROM sms_requests WHERE ip_hash = ? AND created_at >= datetime('now', '-1 hour')").bind(ipHash).first('c'));
-                const hourlyClient = n(await env.DB.prepare("SELECT COUNT(*) AS c FROM sms_requests WHERE client_hash = ? AND created_at >= datetime('now', '-1 hour')").bind(clientHash).first('c'));
-                const globalTenMinutes = n(await env.DB.prepare("SELECT COUNT(*) AS c FROM sms_requests WHERE created_at >= datetime('now', '-10 minutes')").first('c'));
+                const recentPhone = n(await env.DB.prepare("SELECT COUNT(*) AS c FROM sms_requests WHERE phone_hash = ? AND status IN ('pending', 'sent', 'verified') AND created_at >= datetime('now', '-60 seconds')").bind(phoneHash).first('c'));
+                const dailyPhone = n(await env.DB.prepare("SELECT COUNT(*) AS c FROM sms_requests WHERE phone_hash = ? AND status IN ('pending', 'sent', 'verified') AND created_at >= datetime('now', '-24 hours')").bind(phoneHash).first('c'));
+                const hourlyIP = n(await env.DB.prepare("SELECT COUNT(*) AS c FROM sms_requests WHERE ip_hash = ? AND status IN ('pending', 'sent', 'verified') AND created_at >= datetime('now', '-1 hour')").bind(ipHash).first('c'));
+                const hourlyClient = n(await env.DB.prepare("SELECT COUNT(*) AS c FROM sms_requests WHERE client_hash = ? AND status IN ('pending', 'sent', 'verified') AND created_at >= datetime('now', '-1 hour')").bind(clientHash).first('c'));
+                const globalTenMinutes = n(await env.DB.prepare("SELECT COUNT(*) AS c FROM sms_requests WHERE status IN ('pending', 'sent', 'verified') AND created_at >= datetime('now', '-10 minutes')").first('c'));
                 if (recentPhone >= 1 || dailyPhone >= 8 || hourlyIP >= 20 || hourlyClient >= 8 || globalTenMinutes >= 300) {
                     return Response.json({ error: 'Too many SMS requests', code: 'SMS_RATE_LIMITED', fallbackMode: 'password' }, { status: 429, headers: corsHeaders });
                 }
@@ -1225,11 +1269,22 @@ evidence 必须是 1 到 3 条字符串。不要改变用户事实，不要解�
             if (path === "/api/ai/generate-template-copy" && method === "POST") {
                 const body: any = await request.json();
                 const requestId = safeText(body.requestId, 128);
-                const templateTitle = safePromptText(body.templateTitle, 15);
-                const category = safePromptText(body.category, 16);
+                const templateTitle = safeText(body.templateTitle, 15);
+                const templateDescription = safeText(body.templateDescription, 120);
+                const category = safeText(body.category, 16);
+                const workflow = safeText(body.workflow, 120);
+                const fields = sanitizeTemplateFields(body.fields);
                 const tone = safeText(body.tone || "default", 20);
                 if (!requestId || !templateTitle || !category || !ALLOWED_AI_TONES.has(tone)) {
                     return aiError("AI_INVALID_REQUEST", 400, corsHeaders, "Invalid AI template request");
+                }
+                const templateContext = { templateTitle, templateDescription, category, workflow, fields, tone };
+                if (containsUnsafeText(JSON.stringify(templateContext))) {
+                    return Response.json({
+                        error: "Template content was rejected",
+                        code: "AI_UGC_REJECTED",
+                        reason: "玩法内容包含不适合公开传播的信息，请修改标题、描述或填写项后再试。",
+                    }, { status: 422, headers: corsHeaders });
                 }
 
                 const quota = await getAIQuotaStatus(request, env, safeUserId);
@@ -1251,12 +1306,33 @@ evidence 必须是 1 到 3 条字符串。不要改变用户事实，不要解�
                 }
 
                 try {
+                    const review = validateUGCReview(await runJSONAI(
+                        env,
+                        `你是 UGC 内容安全审核员。判断一个中文互动娱乐玩法是否适合公开生成和分享。
+拒绝以下内容：违法违规、威胁伤害、仇恨歧视、色情低俗、赌博毒品、自伤引导、隐私收集、联系方式导流、针对个人的恶意羞辱或明显骚扰。
+允许普通朋友间娱乐、状态测试、投票、聚会游戏和轻松调侃。只有输入文本中存在明确、具体的风险内容时才拒绝，不得凭空推测潜在恶意。
+没有明确风险时必须返回 allowed=true、reason=""、riskTags=[]。只输出 JSON 对象，字段必须为 allowed、reason、riskTags。不要输出 Markdown。`,
+                        JSON.stringify(templateContext),
+                        UGC_REVIEW_SCHEMA
+                    ));
+                    if (!review) {
+                        await finishAIUsage(env, requestId, "failed");
+                        return aiError("AI_INVALID_RESPONSE", 502, corsHeaders, "AI returned invalid moderation content");
+                    }
+                    if (!review.allowed) {
+                        await finishAIUsage(env, requestId, "rejected");
+                        return Response.json({
+                            error: "Template content was rejected",
+                            code: "AI_UGC_REJECTED",
+                            reason: review.reason || "玩法内容不适合公开传播，请修改后重试。",
+                        }, { status: 422, headers: corsHeaders });
+                    }
                     const generated = validateTemplateCopy(await runJSONAI(
                         env,
                         `你是中文互动玩法策划。只输出 JSON 对象，字段必须为 stats、evidencePool、finalPool、levels。
 stats 为 2 到 4 个短指标名称；evidencePool 为至少 3 条轻松证据；finalPool 为至少 2 条海报结论；levels 为至少 2 个结果等级。
 内容要适合朋友间娱乐分享，不得输出威胁、歧视、隐私信息、恶意羞辱或联系方式。不要解释，不要输出 Markdown。`,
-                        JSON.stringify({ templateTitle, category, tone }),
+                        JSON.stringify(templateContext),
                         TEMPLATE_COPY_SCHEMA
                     ));
                     if (!generated) {
@@ -1356,6 +1432,9 @@ stats 为 2 到 4 个短指标名称；evidencePool 为至少 3 条轻松证据�
                     if (!isTextWithin(body.id, 128) ||
                         !isTextWithin(body.title, 15) ||
                         !isTextWithin(body.description, 120) ||
+                        containsUnsafeText(cleanText(body.title)) ||
+                        containsUnsafeText(cleanText(body.description)) ||
+                        containsUnsafeText(cleanText(body.category)) ||
                         !isValidTemplateFormConfig(formConfigRaw) ||
                         !isValidResultConfig(resultConfigRaw)) {
                         return Response.json({
@@ -1398,6 +1477,9 @@ stats 为 2 到 4 个短指标名称；evidencePool 为至少 3 条轻松证据�
                     const resultConfigRaw = serializeConfig(body.resultConfigRaw, body.resultConfig);
                     if (!isTextWithin(body.title, 15) ||
                         !isTextWithin(body.description, 120) ||
+                        containsUnsafeText(cleanText(body.title)) ||
+                        containsUnsafeText(cleanText(body.description)) ||
+                        containsUnsafeText(cleanText(body.category)) ||
                         !isValidTemplateFormConfig(formConfigRaw) ||
                         !isValidResultConfig(resultConfigRaw)) {
                         return Response.json({ error: "Invalid template fields" }, { status: 400, headers: corsHeaders });
