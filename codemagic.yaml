@@ -6,9 +6,11 @@ workflows:
     environment:
       xcode: 16.2
     scripts:
-      - name: Audit backend SQL parameterization
+      - name: Check backend quality
         script: |
-          node backend/scripts/audit-parameterized-sql.mjs
+          cd backend
+          npm install --no-package-lock --ignore-scripts
+          npm run quality
       - name: Generate Xcode Project
         script: |
           brew install xcodegen
@@ -83,9 +85,11 @@ workflows:
     environment:
       xcode: 16.2
     scripts:
-      - name: Audit backend SQL parameterization
+      - name: Check backend quality
         script: |
-          node backend/scripts/audit-parameterized-sql.mjs
+          cd backend
+          npm install --no-package-lock --ignore-scripts
+          npm run quality
       - name: Generate Xcode Project
         script: |
           brew install xcodegen

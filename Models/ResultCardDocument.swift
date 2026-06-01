@@ -184,7 +184,7 @@ struct TemplateOutcomePackage: Codable, Equatable {
             TemplateOutcome(title: "反差选手", subtitle: "越认真回答，越容易制造惊喜", resultLevel: "隐藏彩蛋", quote: "看起来很正常，细看每一项都不太简单。", finalComment: "你的答案组合充满反差感，属于截图发出去最容易引发讨论的类型。", evidencePool: ["答案组合看似合理，拼起来却很有戏", "越往后看，反差越明显", "属于需要二刷才能看懂的隐藏角色"], stats: [TemplateOutcomeStat(name: "反差指数", value: 94), TemplateOutcomeStat(name: "回味程度", value: 84)]),
             TemplateOutcome(title: "随缘天才", subtitle: "没有刻意安排，但结果总是很有效果", resultLevel: "随机事件制造者", quote: "你甚至没想整活，整活却会主动找到你。", finalComment: "你的路线无法简单归类，最大的特点就是每次都能自然地产生新剧情。", evidencePool: ["选择没有固定套路，胜在自然", "擅长在普通场景里触发随机事件", "朋友很难预测你的下一步操作"], stats: [TemplateOutcomeStat(name: "随机指数", value: 89), TemplateOutcomeStat(name: "剧情浓度", value: 91)])
         ]
-        let weights = fields.flatMap { field in
+        let weights: [OptionOutcomeWeight] = fields.flatMap { field -> [OptionOutcomeWeight] in
             guard field.type == .singleSelect || field.type == .multiSelect else { return [] }
             return field.options.enumerated().map { optionIndex, option in
                 OptionOutcomeWeight(
