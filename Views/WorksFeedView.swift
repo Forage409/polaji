@@ -2,13 +2,15 @@ import SwiftUI
 
 struct WorksFeedView: View {
     @StateObject private var likeStore = LikedWorksStore.shared
-    @State private var works: [PublicWork] = []
+    @StateObject private var feedStore = PublicWorksFeedStore.shared
     @State private var isLoading = true
+    private let cardWidth = LayoutMetrics.twoColumnCardWidth()
     
-    let columns = [
-        GridItem(.flexible(), spacing: 12, alignment: .top),
-        GridItem(.flexible(), spacing: 12, alignment: .top)
-    ]
+    private var works: [PublicWork] { feedStore.works }
+    private var columns: [GridItem] { [
+        GridItem(.fixed(cardWidth), spacing: 12, alignment: .top),
+        GridItem(.fixed(cardWidth), spacing: 12, alignment: .top)
+    ] }
     
     var body: some View {
         NavigationStack {
@@ -29,6 +31,7 @@ struct WorksFeedView: View {
                     LazyVGrid(columns: columns, spacing: 16) {
                         ForEach(works) { work in
                             workFeedCard(work)
+                                .frame(width: cardWidth)
                         }
                     }
                     .padding(.horizontal, 16)
@@ -38,11 +41,14 @@ struct WorksFeedView: View {
             .background(Color.themeBackground.edgesIgnoringSafeArea(.all))
             .navigationTitle("作品广场")
             .onAppear(perform: loadWorks)
+            .onReceive(NotificationCenter.default.publisher(for: AppEvents.publicWorksChanged)) { _ in
+                loadWorks()
+            }
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PublicWorkLikeChanged"))) { note in
                 guard let id = note.userInfo?["id"] as? String,
                       let likeCount = note.userInfo?["likeCount"] as? Int,
-                      let index = works.firstIndex(where: { $0.id == id }) else { return }
-                works[index].likeCount = likeCount
+                      works.contains(where: { $0.id == id }) else { return }
+                feedStore.updateLike(id: id, count: likeCount)
             }
         }
     }
@@ -50,10 +56,9 @@ struct WorksFeedView: View {
     private func loadWorks() {
         Task {
             do {
-                let fetched = try await PublicWorksService.shared.fetchWorksFeed()
+                try await feedStore.refresh()
                 await MainActor.run {
                     self.isLoading = false
-                    self.works = fetched
                 }
             } catch {
                 await MainActor.run { self.isLoading = false }

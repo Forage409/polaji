@@ -3,14 +3,14 @@ import SwiftUI
 struct TemplatesView: View {
     @State private var selectedCategory = "全部"
     let categories = ["全部", "人设卡", "判官", "投票", "趣味"]
-    
-    @State private var allTemplates: [Template] = []
+    @StateObject private var catalog = TemplateCatalogStore.shared
+    private let cardWidth = LayoutMetrics.twoColumnCardWidth(horizontalPadding: 16, spacing: 16)
     
     var filteredTemplates: [Template] {
         if selectedCategory == "全部" {
-            return allTemplates
+            return catalog.templates
         } else {
-            return allTemplates.filter { $0.category == selectedCategory }
+            return catalog.templates.filter { $0.category == selectedCategory }
         }
     }
     
@@ -45,8 +45,8 @@ struct TemplatesView: View {
                 ScrollView {
                     LazyVGrid(
                         columns: [
-                            GridItem(.flexible(), spacing: 16, alignment: .top),
-                            GridItem(.flexible(), spacing: 16, alignment: .top)
+                            GridItem(.fixed(cardWidth), spacing: 16, alignment: .top),
+                            GridItem(.fixed(cardWidth), spacing: 16, alignment: .top)
                         ],
                         spacing: 16
                     ) {
@@ -72,6 +72,7 @@ struct TemplatesView: View {
                                     .clipShape(Capsule())
                                     .padding(8)
                                 }
+                                .frame(width: cardWidth)
                                 .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
                             }
                         }
@@ -83,30 +84,10 @@ struct TemplatesView: View {
             .navigationTitle("所有模板")
             .navigationBarTitleDisplayMode(.inline)
             .onAppear {
-                if allTemplates.isEmpty {
-                    loadData()
-                }
+                Task { await catalog.refresh() }
             }
-        }
-    }
-    
-    private func loadData() {
-        Task {
-            do {
-                let fetched = try await RemoteTemplateService.shared.fetchTemplates()
-                await MainActor.run {
-                    MockData.updateUsageCounts(from: fetched)
-                    let mockIds = Set(MockData.allTemplates.map(\.id))
-                    let extras = fetched
-                        .filter { !mockIds.contains($0.id) }
-                        .map { Template(from: $0) }
-                    self.allTemplates = MockData.allTemplates + extras
-                }
-            } catch {
-                print("Failed to load templates: \(error)")
-                await MainActor.run {
-                    self.allTemplates = MockData.allTemplates
-                }
+            .onReceive(NotificationCenter.default.publisher(for: AppEvents.templatesChanged)) { _ in
+                Task { await catalog.refresh() }
             }
         }
     }

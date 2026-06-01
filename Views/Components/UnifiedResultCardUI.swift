@@ -279,7 +279,7 @@ struct UnifiedResultCardUI: View {
                 .frame(width: 16, height: 16)
             Text(showWatermark ? "整活局生成 · zhenghuoju.com" : "内容仅供娱乐")
             Spacer()
-            Text(document.createdAt)
+            Text(LocalTimeFormatter.display(document.createdAt))
                 .lineLimit(1)
         }
         .font(.system(size: 9, weight: .medium))

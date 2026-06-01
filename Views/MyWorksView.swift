@@ -7,6 +7,7 @@ struct MyWorksView: View {
     @State private var searchKeyword: String = ""
     @State private var showSearch = false
     @Environment(\.presentationMode) var presentationMode
+    private let cardWidth = LayoutMetrics.twoColumnCardWidth()
     
     private let categories = ["全部", "人设卡", "判官", "投票", "趣味", "其他"]
     
@@ -40,8 +41,8 @@ struct MyWorksView: View {
                 ScrollView {
                     LazyVGrid(
                         columns: [
-                            GridItem(.flexible(), spacing: 12, alignment: .top),
-                            GridItem(.flexible(), spacing: 12, alignment: .top)
+                            GridItem(.fixed(cardWidth), spacing: 12, alignment: .top),
+                            GridItem(.fixed(cardWidth), spacing: 12, alignment: .top)
                         ],
                         spacing: 12
                     ) {
@@ -49,6 +50,7 @@ struct MyWorksView: View {
                             WorkCardCell(work: work) {
                                 store.deleteWork(id: work.id)
                             }
+                            .frame(width: cardWidth)
                         }
                     }
                     .padding(.horizontal, 16)
@@ -232,7 +234,7 @@ struct WorkCardCell: View {
                             Image(systemName: "clock")
                                 .font(.system(size: 10))
                                 .foregroundColor(.themeTextSecondary)
-                            Text(work.createdAt)
+                            Text(LocalTimeFormatter.display(work.createdAt))
                                 .font(.system(size: 11))
                                 .foregroundColor(.themeTextSecondary)
                                 .lineLimit(1)

@@ -194,25 +194,61 @@ struct MyPublishedTemplatesView: View {
     }
 
     private func updateStatus(_ template: RemoteTemplate, status: String) {
+        updateLocalTemplate(template.id, status: status)
+        if status != "published" {
+            TemplateCatalogStore.shared.remove(id: template.id)
+        }
         Task {
             do {
                 _ = try await RemoteCreatorService.shared.updateTemplateStatus(templateId: template.id, status: status)
-                await MainActor.run { loadData() }
+                await MainActor.run {
+                    AppEvents.postTemplatesChanged()
+                    if status == "published" {
+                        NotificationCenter.default.post(name: AppEvents.selectTemplatesTab, object: nil)
+                    }
+                    loadData()
+                }
             } catch {
-                await MainActor.run { actionError = error.localizedDescription }
+                await MainActor.run {
+                    loadData()
+                    AppEvents.postTemplatesChanged()
+                    actionError = error.localizedDescription
+                }
             }
         }
     }
 
     private func delete(_ template: RemoteTemplate) {
+        removeLocalTemplate(template.id)
+        TemplateCatalogStore.shared.remove(id: template.id)
         Task {
             do {
                 _ = try await RemoteCreatorService.shared.deleteTemplate(templateId: template.id)
-                await MainActor.run { loadData() }
+                await MainActor.run {
+                    AppEvents.postTemplatesChanged()
+                    loadData()
+                }
             } catch {
-                await MainActor.run { actionError = error.localizedDescription }
+                await MainActor.run {
+                    loadData()
+                    AppEvents.postTemplatesChanged()
+                    actionError = error.localizedDescription
+                }
             }
         }
+    }
+
+    private func removeLocalTemplate(_ id: String) {
+        guard case .loaded(let templates) = state else { return }
+        let remaining = templates.filter { $0.id != id }
+        state = remaining.isEmpty ? .empty : .loaded(remaining)
+    }
+
+    private func updateLocalTemplate(_ id: String, status: String) {
+        guard case .loaded(var templates) = state,
+              let index = templates.firstIndex(where: { $0.id == id }) else { return }
+        templates[index].status = status
+        state = .loaded(templates)
     }
 
     @ViewBuilder
@@ -330,7 +366,7 @@ struct TemplateStatsView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(template.title)
                         .font(.system(size: 20, weight: .bold))
-                    Text("发布于 \(template.createdAt)")
+                    Text("发布于 \(LocalTimeFormatter.display(template.createdAt))")
                         .font(.system(size: 12))
                         .foregroundColor(.themeTextSecondary)
                 }

@@ -43,21 +43,21 @@ struct DiscoverView: View {
 
 // MARK: - Templates Waterfall
 struct TemplatesWaterfallView: View {
-    @State private var templates: [Template] = MockData.allTemplates
-    @State private var isLoading = false
-    @State private var hasError = false
+    @StateObject private var catalog = TemplateCatalogStore.shared
+    private let cardWidth = LayoutMetrics.twoColumnCardWidth()
+
+    private var columns: [GridItem] { [
+        GridItem(.fixed(cardWidth), spacing: 12, alignment: .top),
+        GridItem(.fixed(cardWidth), spacing: 12, alignment: .top)
+    ] }
     
-    let columns = [
-        GridItem(.flexible(), spacing: 12, alignment: .top),
-        GridItem(.flexible(), spacing: 12, alignment: .top)
-    ]
+    private var templates: [Template] {
+        catalog.templates
+    }
     
     var body: some View {
         Group {
-            if isLoading && templates.isEmpty {
-                ProgressView("加载中...")
-                    .padding(.top, 50)
-            } else if templates.isEmpty {
+            if templates.isEmpty {
                 VStack(spacing: 12) {
                     Image(systemName: "sparkles.rectangle.stack")
                         .font(.system(size: 40))
@@ -72,6 +72,7 @@ struct TemplatesWaterfallView: View {
                         ForEach(templates) { template in
                             NavigationLink(destination: TemplateDetailView(template: template)) {
                                 TemplateWaterfallCard(template: template)
+                                    .frame(width: cardWidth)
                             }
                             .buttonStyle(PlainButtonStyle())
                         }
@@ -82,32 +83,10 @@ struct TemplatesWaterfallView: View {
             }
         }
         .onAppear {
-            loadData()
+            Task { await catalog.refresh() }
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshFeed"))) { _ in
-            loadData()
-        }
-    }
-    
-    private func loadData() {
-        Task {
-            do {
-                let fetched = try await RemoteTemplateService.shared.fetchTemplates()
-                await MainActor.run {
-                    MockData.updateUsageCounts(from: fetched)
-                    // Merge: keep local mocks, append any remote templates not already in MockData
-                    let mockIds = Set(MockData.allTemplates.map { $0.id })
-                    let extras = fetched
-                        .filter { !mockIds.contains($0.id) }
-                        .map { Template(from: $0) }
-                    self.templates = MockData.allTemplates + extras
-                }
-            } catch {
-                print("Failed to load real templates: \(error)")
-                await MainActor.run {
-                    self.templates = MockData.allTemplates
-                }
-            }
+        .onReceive(NotificationCenter.default.publisher(for: AppEvents.templatesChanged)) { _ in
+            Task { await catalog.refresh() }
         }
     }
 }
@@ -189,16 +168,17 @@ struct TemplateWaterfallCard: View {
 // MARK: - Works Waterfall
 struct WorksFeedWaterfallView: View {
     @StateObject private var likeStore = LikedWorksStore.shared
-    @State private var works: [PublicWork] = []
+    @StateObject private var feedStore = PublicWorksFeedStore.shared
     @State private var isLoading = true
     @State private var isLoadingMore = false
-    @State private var hasMore = true
     @State private var errorMessage = ""
+    private let cardWidth = LayoutMetrics.twoColumnCardWidth()
     
-    let columns = [
-        GridItem(.flexible(), spacing: 12, alignment: .top),
-        GridItem(.flexible(), spacing: 12, alignment: .top)
-    ]
+    private var works: [PublicWork] { feedStore.works }
+    private var columns: [GridItem] { [
+        GridItem(.fixed(cardWidth), spacing: 12, alignment: .top),
+        GridItem(.fixed(cardWidth), spacing: 12, alignment: .top)
+    ] }
     
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -232,12 +212,13 @@ struct WorksFeedWaterfallView: View {
                     ForEach(works) { work in
                         NavigationLink(destination: PublicWorkDetailView(work: work)) {
                             workFeedCard(work)
+                                .frame(width: cardWidth)
                         }
                         .buttonStyle(PlainButtonStyle())
                     }
                 }
                 .padding(.horizontal, 16)
-                if hasMore {
+                if feedStore.hasMore {
                     Button(action: { loadWorks(reset: false) }) {
                         if isLoadingMore {
                             ProgressView()
@@ -262,14 +243,14 @@ struct WorksFeedWaterfallView: View {
         .onAppear {
             loadWorks(reset: true)
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshWorksFeed"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: AppEvents.publicWorksChanged)) { _ in
             loadWorks(reset: true)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PublicWorkLikeChanged"))) { note in
             guard let id = note.userInfo?["id"] as? String,
                   let likeCount = note.userInfo?["likeCount"] as? Int,
-                  let index = works.firstIndex(where: { $0.id == id }) else { return }
-            works[index].likeCount = likeCount
+                  works.contains(where: { $0.id == id }) else { return }
+            feedStore.updateLike(id: id, count: likeCount)
         }
     }
 
@@ -278,21 +259,20 @@ struct WorksFeedWaterfallView: View {
             isLoading = true
             errorMessage = ""
         } else {
-            guard !isLoadingMore, hasMore else { return }
+            guard !isLoadingMore, feedStore.hasMore else { return }
             isLoadingMore = true
         }
         Task {
             do {
-                let offset = reset ? 0 : works.count
-                let fetched = try await PublicWorksService.shared.fetchWorksFeed(offset: offset)
+                if reset {
+                    try await feedStore.refresh()
+                } else {
+                    try await feedStore.loadMore()
+                }
                 await MainActor.run {
                     self.isLoading = false
                     self.isLoadingMore = false
                     self.errorMessage = ""
-                    self.hasMore = fetched.count == 20
-                    self.works = reset ? fetched : works + fetched.filter { newWork in
-                        !works.contains { $0.id == newWork.id }
-                    }
                 }
             } catch {
                 await MainActor.run {

@@ -46,6 +46,7 @@ struct PublicWork: Codable, Identifiable {
     let imageUrl: String
     let authorId: String
     let authorName: String
+    let authorAvatar: String?
     let templateId: String
     let category: String
     let isAnonymous: Bool

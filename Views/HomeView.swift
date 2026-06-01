@@ -2,7 +2,7 @@ import SwiftUI
 
 struct HomeView: View {
     @StateObject private var store = WorksStore()
-    @State private var hotTemplates: [Template] = MockData.hotTemplates
+    @StateObject private var catalog = TemplateCatalogStore.shared
     
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -13,7 +13,7 @@ struct HomeView: View {
                 
                 QuickActionsScrollView()
                 
-                HotTemplatesView(templates: hotTemplates)
+                HotTemplatesView(templates: catalog.featuredTemplates)
                 
                 if !store.works.isEmpty {
                     RecentWorksView(works: store.works)
@@ -27,17 +27,10 @@ struct HomeView: View {
         .background(Color.themeBackground.edgesIgnoringSafeArea(.all))
         .onAppear {
             store.refresh()
-            Task {
-                do {
-                    let fetched = try await RemoteTemplateService.shared.fetchFeaturedTemplates()
-                    await MainActor.run {
-                        MockData.updateUsageCounts(from: fetched)
-                        self.hotTemplates = MockData.hotTemplates
-                    }
-                } catch {
-                    print("Failed to fetch featured templates: \(error)")
-                }
-            }
+            Task { await catalog.refresh() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: AppEvents.templatesChanged)) { _ in
+            Task { await catalog.refresh() }
         }
     }
 }

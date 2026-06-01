@@ -19,6 +19,13 @@ struct HeaderView: View {
                         .resizable()
                         .scaledToFit()
                         .frame(width: 28, height: 28)
+                        .clipShape(Circle())
+                        .overlay {
+                            Circle()
+                                .stroke(Color.white.opacity(0.85), lineWidth: 1)
+                        }
+                        .clipShape(Circle())
+                        .overlay(Circle().stroke(Color.themePrimary.opacity(0.55), lineWidth: 1))
                 }
                 
                 if let suffix = titleSuffix {

@@ -11,6 +11,7 @@ struct PublicWorkDetailView: View {
     @State private var heartFlyOpacity: Double = 0
     @State private var heartFlyOffset: CGFloat = 0
     @State private var isProcessingLike = false
+    @State private var showingFullImage = false
 
     init(work: PublicWork) {
         self.work = work
@@ -22,19 +23,20 @@ struct PublicWorkDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                CachedAsyncImage(url: RemoteImageURL.resolve(work.imageUrl)) { image in
-                    image
-                        .resizable()
-                        .scaledToFill()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } placeholder: {
-                    Rectangle()
-                        .fill(Color.gray.opacity(0.15))
-                        .aspectRatio(3/4, contentMode: .fit)
-                        .overlay(ProgressView())
+                Button(action: { showingFullImage = true }) {
+                    CachedAsyncImage(url: RemoteImageURL.resolve(work.imageUrl)) { image in
+                        image
+                            .resizable()
+                            .scaledToFit()
+                    } placeholder: {
+                        Rectangle()
+                            .fill(Color.gray.opacity(0.15))
+                            .overlay(ProgressView())
+                    }
+                    .frame(width: 280, height: 360)
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
                 }
-                .frame(width: 260, height: 325)
-                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .buttonStyle(PlainButtonStyle())
                 .frame(maxWidth: .infinity)
 
                 VStack(alignment: .leading, spacing: 8) {
@@ -42,17 +44,22 @@ struct PublicWorkDetailView: View {
                         .font(.system(size: 20, weight: .bold))
                         .foregroundColor(.themeTextMain)
 
-                    HStack(spacing: 8) {
-                        Text(work.isAnonymous ? "匿名用户" : work.authorName)
-                            .font(.system(size: 13))
-                            .foregroundColor(.themeTextSecondary)
+                    HStack(spacing: 10) {
+                        AvatarImage(name: displayedAvatar)
+                            .scaledToFill()
+                            .frame(width: 34, height: 34)
+                            .clipShape(Circle())
 
-                        if !work.category.isEmpty {
-                            Text("·")
-                                .foregroundColor(.themeTextSecondary)
-                            Text(work.category)
-                                .font(.system(size: 13))
-                                .foregroundColor(.themeTextSecondary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(work.isAnonymous ? "匿名用户" : work.authorName)
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundColor(.themeTextMain)
+
+                            if !work.category.isEmpty {
+                                Text(work.category)
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.themeTextSecondary)
+                            }
                         }
                     }
 
@@ -107,6 +114,14 @@ struct PublicWorkDetailView: View {
         .navigationTitle("作品详情")
         .navigationBarTitleDisplayMode(.inline)
         .toast(isPresented: $showingAlert, message: alertMessage)
+        .fullScreenCover(isPresented: $showingFullImage) {
+            FullScreenRemoteImageView(url: RemoteImageURL.resolve(work.imageUrl))
+        }
+    }
+
+    private var displayedAvatar: String {
+        guard !work.isAnonymous else { return "logo" }
+        return work.authorAvatar?.isEmpty == false ? work.authorAvatar! : "logo"
     }
 
     private var likeButton: some View {
@@ -171,6 +186,7 @@ struct PublicWorkDetailView: View {
                         object: nil,
                         userInfo: ["id": work.id, "likeCount": likeCount]
                     )
+                    PublicWorksFeedStore.shared.updateLike(id: work.id, count: likeCount)
                     isProcessingLike = false
                 }
             } catch {

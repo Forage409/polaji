@@ -21,6 +21,9 @@ class APIClient {
         let identityManager = AnonymousIdentityManager.shared
         request.setValue(identityManager.currentUserId, forHTTPHeaderField: "X-Anonymous-User-Id")
         request.setValue("Bearer \(identityManager.currentInstallToken)", forHTTPHeaderField: "Authorization")
+        if VipManager.shared.isVip {
+            request.setValue("true", forHTTPHeaderField: "X-Debug-Vip")
+        }
         
         // Add custom headers
         headers?.forEach { key, value in

@@ -143,7 +143,7 @@ struct PublishWorkView: View {
                                 isShared: true
                             )
                         )
-                        NotificationCenter.default.post(name: NSNotification.Name("RefreshWorksFeed"), object: nil)
+                        AppEvents.postPublicWorksChanged()
                         alertMsg = "发布成功！"
                         showAlert = true
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {

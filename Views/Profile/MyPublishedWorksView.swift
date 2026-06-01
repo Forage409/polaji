@@ -98,17 +98,21 @@ struct MyPublishedWorksView: View {
 
     private func delete(_ work: PublicWork) {
         deletingId = work.id
+        let removedIndex = works.firstIndex(where: { $0.id == work.id })
+        works.removeAll { $0.id == work.id }
+        PublicWorksFeedStore.shared.remove(id: work.id)
         Task {
             do {
                 _ = try await PublicWorksService.shared.deleteWork(id: work.id)
                 await MainActor.run {
                     WorksStore.shared.deleteWork(id: work.id)
-                    works.removeAll { $0.id == work.id }
-                    NotificationCenter.default.post(name: NSNotification.Name("RefreshWorksFeed"), object: nil)
+                    AppEvents.postPublicWorksChanged()
                     deletingId = nil
                 }
             } catch {
                 await MainActor.run {
+                    works.insert(work, at: min(removedIndex ?? 0, works.count))
+                    PublicWorksFeedStore.shared.restore(work, at: removedIndex)
                     errorMessage = "撤回失败：\(error.localizedDescription)"
                     deletingId = nil
                 }

@@ -10,6 +10,9 @@ struct EditProfileView: View {
     @State private var draftAvatar: String = "logo"
     @State private var showCopied = false
     @State private var selectedItem: PhotosPickerItem? = nil
+    @State private var isSaving = false
+    @State private var showSaveAlert = false
+    @State private var saveAlertMessage = ""
     
     private let avatarOptions: [String] = [
         "logo",
@@ -67,9 +70,9 @@ struct EditProfileView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button("保存", action: save)
+                Button(isSaving ? "保存中..." : "保存", action: save)
                     .fontWeight(.bold)
-                    .disabled(draftNickname.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .disabled(isSaving || draftNickname.trimmingCharacters(in: .whitespaces).isEmpty)
                     .foregroundColor(draftNickname.trimmingCharacters(in: .whitespaces).isEmpty ? .themeTextSecondary : Color(hex: "B58900"))
             }
         }
@@ -79,6 +82,7 @@ struct EditProfileView: View {
             draftAvatar = profile.avatarName
         }
         .toast(isPresented: $showCopied, message: "ID 已复制")
+        .toast(isPresented: $showSaveAlert, message: saveAlertMessage)
     }
     
     private var avatarSection: some View {
@@ -187,9 +191,33 @@ struct EditProfileView: View {
     private func save() {
         let trimmed = draftNickname.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
-        profile.nickname = trimmed
-        profile.bio = draftBio.trimmingCharacters(in: .whitespacesAndNewlines)
-        profile.avatarName = draftAvatar
-        presentationMode.wrappedValue.dismiss()
+        isSaving = true
+        Task {
+            do {
+                let finalAvatar = try await uploadAvatarIfNeeded(draftAvatar)
+                await MainActor.run {
+                    profile.nickname = trimmed
+                    profile.bio = draftBio.trimmingCharacters(in: .whitespacesAndNewlines)
+                    profile.avatarName = finalAvatar
+                    isSaving = false
+                    presentationMode.wrappedValue.dismiss()
+                }
+            } catch {
+                await MainActor.run {
+                    isSaving = false
+                    saveAlertMessage = "头像上传失败，请检查网络后重试"
+                    showSaveAlert = true
+                }
+            }
+        }
+    }
+
+    private func uploadAvatarIfNeeded(_ avatar: String) async throws -> String {
+        guard avatar.hasPrefix("custom_"),
+              let image = ImageExportManager.shared.loadImage(from: avatar),
+              let data = image.jpegData(compressionQuality: 0.82) else {
+            return avatar
+        }
+        return try await APIClient.shared.upload(path: "/api/upload", data: data, contentType: "image/jpeg")
     }
 }

@@ -54,7 +54,11 @@ struct GenerateFormView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 12)
-                .padding(.bottom, 30)
+                Text("VIP 可开启 AI 爆梗优化，让结果更像朋友圈神评")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.themeTextSecondary)
+                    .padding(.top, 2)
+                    .padding(.bottom, 18)
             }
             .background(Color.themeBackground)
             .shadow(color: .black.opacity(0.05), radius: 10, y: -5)
@@ -216,14 +220,14 @@ struct GenerateFormView: View {
                 inputGroup(title: field.label) {
                     TextField(
                         field.placeholder.isEmpty ? "请输入\(field.label)" : field.placeholder,
-                        text: dynamicNumberBinding(for: field.id)
+                        text: dynamicTextBinding(for: field.id)
                     )
                 }
             case .number:
                 inputGroup(title: field.label) {
                     TextField(
                         field.placeholder.isEmpty ? "请输入数字" : field.placeholder,
-                        text: dynamicTextBinding(for: field.id)
+                        text: dynamicNumberBinding(for: field.id)
                     )
                     .keyboardType(.numberPad)
                 }

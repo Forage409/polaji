@@ -1,0 +1,138 @@
+import Foundation
+
+enum AITone: String, Codable, CaseIterable, Identifiable {
+    case `default`
+    case sharp
+    case cute
+    case absurd
+    case formal
+    case moments
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .default: return "爆梗优化"
+        case .sharp: return "毒舌"
+        case .cute: return "可爱"
+        case .absurd: return "抽象"
+        case .formal: return "正经"
+        case .moments: return "朋友圈风"
+        }
+    }
+}
+
+struct AIQuotaStatus: Codable {
+    let isVip: Bool
+    let limit: Int
+    let used: Int
+    let remaining: Int
+    let window: String
+}
+
+struct AIOptimizedCopy: Codable {
+    let title: String
+    let subtitle: String
+    let evidence: [String]
+    let resultLevel: String
+    let quote: String
+    let finalComment: String
+    let quota: AIQuotaStatus
+}
+
+struct AITemplateCopyReceipt: Codable {
+    let stats: [String]
+    let evidencePool: [String]
+    let finalPool: [String]
+    let levels: [String]
+    let quota: AIQuotaStatus
+
+    var library: TemplateCopyLibrary {
+        TemplateCopyLibrary(stats: stats, evidencePool: evidencePool, finalPool: finalPool, levels: levels)
+    }
+}
+
+enum AIServiceError: LocalizedError {
+    case quotaExceeded
+    case vipRequired
+    case requestReplay
+    case invalidResponse
+    case unavailable
+    case requestFailed(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .quotaExceeded: return "今日 AI 次数已用完，开通 VIP 可获得更多次数。"
+        case .vipRequired: return "这项 AI 能力为 VIP 专属。"
+        case .requestReplay: return "本次请求已处理，请勿重复提交。"
+        case .invalidResponse: return "AI 返回内容不完整，请稍后重试。"
+        case .unavailable: return "AI 服务暂时不可用，请稍后重试。"
+        case .requestFailed(let message): return message
+        }
+    }
+}
+
+final class AIService {
+    static let shared = AIService()
+
+    private init() {}
+
+    func fetchStatus() async throws -> AIQuotaStatus {
+        let request = try APIClient.shared.createRequest(path: "/api/ai/status")
+        return try await perform(request)
+    }
+
+    func optimize(document: ResultCardDocument, userInputs: [String: String], tone: AITone) async throws -> AIOptimizedCopy {
+        let payload: [String: Any] = [
+            "requestId": UUID().uuidString,
+            "templateId": document.templateId,
+            "tone": tone.rawValue,
+            "userInputs": userInputs,
+            "resultDocument": [
+                "title": document.title,
+                "subtitle": document.subtitle,
+                "evidence": document.evidence,
+                "resultLevel": document.resultLevel,
+                "quote": document.quote,
+                "finalComment": document.finalComment
+            ]
+        ]
+        let body = try JSONSerialization.data(withJSONObject: payload)
+        let request = try APIClient.shared.createRequest(path: "/api/ai/optimize-result", method: "POST", body: body)
+        return try await perform(request)
+    }
+
+    func generateTemplateCopy(title: String, category: String, tone: AITone) async throws -> AITemplateCopyReceipt {
+        let payload: [String: Any] = [
+            "requestId": UUID().uuidString,
+            "templateTitle": title,
+            "category": category,
+            "tone": tone.rawValue
+        ]
+        let body = try JSONSerialization.data(withJSONObject: payload)
+        let request = try APIClient.shared.createRequest(path: "/api/ai/generate-template-copy", method: "POST", body: body)
+        return try await perform(request)
+    }
+
+    private func perform<T: Decodable>(_ request: URLRequest) async throws -> T {
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw AIServiceError.unavailable }
+        if (200..<300).contains(http.statusCode) {
+            guard let decoded = try? JSONDecoder().decode(T.self, from: data) else {
+                throw AIServiceError.invalidResponse
+            }
+            return decoded
+        }
+
+        let body = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        switch body?["code"] as? String {
+        case "AI_QUOTA_EXCEEDED": throw AIServiceError.quotaExceeded
+        case "VIP_REQUIRED": throw AIServiceError.vipRequired
+        case "AI_REQUEST_REPLAY": throw AIServiceError.requestReplay
+        case "AI_INVALID_RESPONSE": throw AIServiceError.invalidResponse
+        case "AI_UPSTREAM_FAILED": throw AIServiceError.unavailable
+        default:
+            throw AIServiceError.requestFailed((body?["error"] as? String) ?? "AI 请求失败，请稍后重试。")
+        }
+    }
+}

@@ -1,9 +1,11 @@
 import SwiftUI
+import Combine
 
 struct ContentView: View {
     @State private var selectedTab = 0
     @State private var showCreateDialog = false
     @State private var createTemplate: Template?
+    private let refreshTimer = Timer.publish(every: 15, on: .main, in: .common).autoconnect()
     
     var body: some View {
         NavigationStack {
@@ -33,6 +35,15 @@ struct ContentView: View {
             .toolbar(.hidden, for: .navigationBar)
             .fullScreenCover(isPresented: $showCreateDialog) {
                 TemplateEditorView()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: AppEvents.selectTemplatesTab)) { _ in
+                selectedTab = 2
+            }
+            .onReceive(refreshTimer) { _ in
+                Task {
+                    await TemplateCatalogStore.shared.refresh()
+                    try? await PublicWorksFeedStore.shared.refresh()
+                }
             }
         }
     }

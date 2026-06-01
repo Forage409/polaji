@@ -10,7 +10,11 @@ struct ZhengHuoJuApp: App {
                 .onChange(of: scenePhase) { phase in
                     guard phase == .active else { return }
                     AppNotificationManager.shared.refresh()
-                    Task { await AppNotificationManager.shared.checkForNewTemplates() }
+                    Task {
+                        await AppNotificationManager.shared.checkForNewTemplates()
+                        await TemplateCatalogStore.shared.refresh()
+                        try? await PublicWorksFeedStore.shared.refresh()
+                    }
                 }
         }
     }

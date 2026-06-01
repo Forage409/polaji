@@ -1,6 +1,9 @@
 export interface Env {
     BUCKET: R2Bucket;
     DB: D1Database;
+    AI: any;
+    AI_MODEL?: string;
+    ALLOW_DEBUG_VIP?: string;
 }
 
 // Safe binding helpers: D1 throws D1_TYPE_ERROR if any bind value is undefined.
@@ -78,6 +81,251 @@ function isValidResultConfig(raw: string): boolean {
     }
 }
 
+const FREE_AI_LIMIT = 3;
+const VIP_AI_LIMIT = 50;
+const DEFAULT_AI_MODEL = "@cf/meta/llama-3.1-8b-instruct-fast";
+const ALLOWED_AI_TONES = new Set(["default", "sharp", "cute", "absurd", "formal", "moments"]);
+const OPTIMIZED_COPY_KEYS = ["title", "subtitle", "evidence", "resultLevel", "quote", "finalComment"];
+const TEMPLATE_COPY_KEYS = ["stats", "evidencePool", "finalPool", "levels"];
+
+const OPTIMIZED_COPY_SCHEMA = {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+        title: { type: "string", minLength: 1, maxLength: 18 },
+        subtitle: { type: "string", maxLength: 30 },
+        evidence: {
+            type: "array",
+            minItems: 1,
+            maxItems: 3,
+            items: { type: "string", minLength: 1, maxLength: 28 },
+        },
+        resultLevel: { type: "string", minLength: 1, maxLength: 16 },
+        quote: { type: "string", minLength: 1, maxLength: 36 },
+        finalComment: { type: "string", minLength: 1, maxLength: 50 },
+    },
+    required: OPTIMIZED_COPY_KEYS,
+};
+
+const TEMPLATE_COPY_SCHEMA = {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+        stats: {
+            type: "array",
+            minItems: 2,
+            maxItems: 4,
+            items: { type: "string", minLength: 1, maxLength: 12 },
+        },
+        evidencePool: {
+            type: "array",
+            minItems: 3,
+            maxItems: 8,
+            items: { type: "string", minLength: 1, maxLength: 28 },
+        },
+        finalPool: {
+            type: "array",
+            minItems: 2,
+            maxItems: 6,
+            items: { type: "string", minLength: 1, maxLength: 50 },
+        },
+        levels: {
+            type: "array",
+            minItems: 2,
+            maxItems: 6,
+            items: { type: "string", minLength: 1, maxLength: 16 },
+        },
+    },
+    required: TEMPLATE_COPY_KEYS,
+};
+
+type AIQuotaStatus = {
+    isVip: boolean;
+    limit: number;
+    used: number;
+    remaining: number;
+    window: "rolling_24h";
+};
+
+function safeText(value: any, maxLength: number): string {
+    return cleanText(value).slice(0, maxLength);
+}
+
+function safePromptText(value: any, maxLength: number): string {
+    const text = safeText(value, maxLength);
+    return containsUnsafeText(text) ? "" : text;
+}
+
+function safeTextArray(value: any, maxItems: number, maxLength: number): string[] {
+    if (!Array.isArray(value)) return [];
+    return value
+        .map((item: any) => safeText(item, maxLength))
+        .filter((item: string) => item.length > 0)
+        .slice(0, maxItems);
+}
+
+function containsUnsafeText(value: string): boolean {
+    return /(身份证|银行卡|手机号|电话号码|住址|密码|威胁|杀死|去死|种族歧视|性别歧视|傻逼|废物|垃圾|滚蛋|微信|QQ|邮箱|联系我|加我|https?:\/\/|www\.|[\w.+-]+@[\w.-]+\.[a-z]{2,}|(?<!\d)1[3-9]\d{9}(?!\d)|(?<!\d)\d{17}[\dXx](?!\d))/i.test(value);
+}
+
+function isSafeTextArray(values: string[]): boolean {
+    return values.every((value) => !containsUnsafeText(value));
+}
+
+function hasExactKeys(value: Record<string, any>, expectedKeys: string[]): boolean {
+    const actualKeys = Object.keys(value).sort();
+    return actualKeys.length === expectedKeys.length &&
+        actualKeys.every((key, index) => key === [...expectedKeys].sort()[index]);
+}
+
+function outputText(value: any, maxLength: number, allowEmpty: boolean = false): string | null {
+    if (typeof value !== "string") return null;
+    const text = value.trim();
+    if ((!allowEmpty && !text) || text.length > maxLength || containsUnsafeText(text)) return null;
+    return text;
+}
+
+function outputTextArray(value: any, minItems: number, maxItems: number, maxLength: number): string[] | null {
+    if (!Array.isArray(value) || value.length < minItems || value.length > maxItems) return null;
+    const texts = value.map((item) => outputText(item, maxLength));
+    return texts.every((item): item is string => item !== null) ? texts : null;
+}
+
+function aiError(code: string, status: number, headers: Record<string, string>, message: string): Response {
+    return Response.json({ error: message, code }, { status, headers });
+}
+
+async function ensureAIUsageTable(env: Env): Promise<void> {
+    await env.DB.prepare(`
+        CREATE TABLE IF NOT EXISTS ai_usage (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            feature TEXT NOT NULL,
+            tone TEXT NOT NULL,
+            status TEXT NOT NULL,
+            model TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    `).run();
+    await env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_ai_usage_user_created_at ON ai_usage(user_id, created_at)").run();
+}
+
+async function getAIQuotaStatus(request: Request, env: Env, userId: string): Promise<AIQuotaStatus> {
+    await ensureAIUsageTable(env);
+    let user: any = null;
+    try {
+        user = await env.DB.prepare("SELECT vip_until FROM users WHERE id = ?").bind(userId).first();
+    } catch {
+        // Compatibility during rolling deployment before the vip_until migration lands.
+        user = null;
+    }
+    const debugVip = env.ALLOW_DEBUG_VIP === "true" && request.headers.get("X-Debug-Vip") === "true";
+    const vipUntil = Date.parse(s(user?.vip_until));
+    const isVip = debugVip || (!Number.isNaN(vipUntil) && vipUntil > Date.now());
+    const limit = isVip ? VIP_AI_LIMIT : FREE_AI_LIMIT;
+    const used = n(await env.DB.prepare(`
+        SELECT COUNT(*) AS c FROM ai_usage
+        WHERE user_id = ?
+          AND status IN ('pending', 'succeeded')
+          AND created_at >= datetime('now', '-24 hours')
+    `).bind(userId).first("c"));
+    return { isVip, limit, used, remaining: Math.max(0, limit - used), window: "rolling_24h" };
+}
+
+async function reserveAIUsage(env: Env, requestId: string, userId: string, feature: string, tone: string, model: string): Promise<boolean> {
+    const existing = await env.DB.prepare("SELECT id FROM ai_usage WHERE id = ?").bind(requestId).first();
+    if (existing) return false;
+    await env.DB.prepare(`
+        INSERT INTO ai_usage (id, user_id, feature, tone, status, model)
+        VALUES (?, ?, ?, ?, 'pending', ?)
+    `).bind(requestId, userId, feature, tone, model).run();
+    return true;
+}
+
+async function finishAIUsage(env: Env, requestId: string, status: "succeeded" | "failed"): Promise<void> {
+    await env.DB.prepare("UPDATE ai_usage SET status = ? WHERE id = ?").bind(status, requestId).run();
+}
+
+function parseAIJSON(raw: any): any {
+    if (raw && typeof raw.response === "object") return raw.response;
+    const text = s(raw?.response ?? raw?.result ?? raw).replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
+    return JSON.parse(text);
+}
+
+function sanitizeUserInputs(value: any): Record<string, string> {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+    const entries = Object.entries(value)
+        .slice(0, 12)
+        .map(([key, item]) => [safePromptText(key, 16), safePromptText(item, 80)])
+        .filter(([key, item]) => key && item);
+    return Object.fromEntries(entries);
+}
+
+function sanitizeResultDocument(value: any): Record<string, any> {
+    const doc = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+    return {
+        title: safePromptText(doc.title, 36),
+        subtitle: safePromptText(doc.subtitle, 52),
+        evidence: safeTextArray(doc.evidence, 3, 80).filter((item) => !containsUnsafeText(item)),
+        resultLevel: safePromptText(doc.resultLevel, 24),
+        quote: safePromptText(doc.quote, 72),
+        finalComment: safePromptText(doc.finalComment, 100),
+    };
+}
+
+function validateOptimizedCopy(value: any): any | null {
+    if (!value || typeof value !== "object" || Array.isArray(value) || !hasExactKeys(value, OPTIMIZED_COPY_KEYS)) return null;
+    const title = outputText(value.title, 18);
+    const subtitle = outputText(value.subtitle, 30, true);
+    const evidence = outputTextArray(value.evidence, 1, 3, 28);
+    const resultLevel = outputText(value.resultLevel, 16);
+    const quote = outputText(value.quote, 36);
+    const finalComment = outputText(value.finalComment, 50);
+    if (title === null || subtitle === null || evidence === null || resultLevel === null || quote === null || finalComment === null) return null;
+    const result = {
+        title,
+        subtitle,
+        evidence,
+        resultLevel,
+        quote,
+        finalComment,
+    };
+    return result;
+}
+
+function validateTemplateCopy(value: any): any | null {
+    if (!value || typeof value !== "object" || Array.isArray(value) || !hasExactKeys(value, TEMPLATE_COPY_KEYS)) return null;
+    const stats = outputTextArray(value.stats, 2, 4, 12);
+    const evidencePool = outputTextArray(value.evidencePool, 3, 8, 28);
+    const finalPool = outputTextArray(value.finalPool, 2, 6, 50);
+    const levels = outputTextArray(value.levels, 2, 6, 16);
+    if (stats === null || evidencePool === null || finalPool === null || levels === null) return null;
+    const result = {
+        stats,
+        evidencePool,
+        finalPool,
+        levels,
+    };
+    return result;
+}
+
+async function runJSONAI(env: Env, system: string, user: string, jsonSchema: Record<string, any>): Promise<any> {
+    const model = env.AI_MODEL || DEFAULT_AI_MODEL;
+    const response = await env.AI.run(model, {
+        messages: [
+            { role: "system", content: system },
+            { role: "user", content: user },
+        ],
+        response_format: {
+            type: "json_schema",
+            json_schema: jsonSchema,
+        },
+        max_tokens: 900,
+        temperature: 0.75,
+    });
+    return parseAIJSON(response);
+}
+
 // Map a templates row (joined with template_stats) to the frontend RemoteTemplate shape.
 // Frontend uses camelCase and requires stats fields even when none exist yet.
 function mapTemplate(row: any, origin: string = ''): any {
@@ -122,6 +370,7 @@ function mapWork(row: any, origin: string = '', revealAuthor: boolean = false): 
         imageUrl: rewriteImageUrl(s(row.image_url), origin),
         authorId: isAnonymous && !revealAuthor ? '' : s(row.author_id),
         authorName: isAnonymous && !revealAuthor ? '匿名用户' : s(row.author_name),
+        authorAvatar: isAnonymous && !revealAuthor ? '' : s(row.author_avatar),
         templateId: s(row.template_id),
         category: s(row.category),
         isAnonymous,
@@ -211,7 +460,7 @@ export default {
         const corsHeaders = {
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Methods": "GET,HEAD,POST,OPTIONS,PUT,DELETE",
-            "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Anonymous-User-Id",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Anonymous-User-Id, X-Debug-Vip",
         };
 
         if (method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -226,7 +475,10 @@ export default {
                     return Response.json({ error: "Missing fields" }, { status: 400, headers: corsHeaders });
                 }
                 const tokenHash = await hashToken(body.installToken);
-                await env.DB.prepare(`INSERT OR REPLACE INTO users (id, install_token_hash, created_at) VALUES (?, ?, CURRENT_TIMESTAMP)`).bind(s(body.anonymousUserId), s(tokenHash)).run();
+                await env.DB.prepare(`
+                    INSERT INTO users (id, install_token_hash, created_at) VALUES (?, ?, CURRENT_TIMESTAMP)
+                    ON CONFLICT(id) DO UPDATE SET install_token_hash = excluded.install_token_hash
+                `).bind(s(body.anonymousUserId), s(tokenHash)).run();
                 return Response.json({ success: true }, { headers: corsHeaders });
             }
 
@@ -322,6 +574,118 @@ export default {
             }
             const safeUserId = s(userId);
 
+            // ---- PROTECTED AI ENDPOINTS ----
+            if (path === "/api/ai/status" && method === "GET") {
+                return Response.json(await getAIQuotaStatus(request, env, safeUserId), { headers: corsHeaders });
+            }
+
+            if (path === "/api/ai/optimize-result" && method === "POST") {
+                const body: any = await request.json();
+                const requestId = safeText(body.requestId, 128);
+                const templateId = safeText(body.templateId, 128);
+                const tone = safeText(body.tone || "default", 20);
+                if (!requestId || !templateId || !ALLOWED_AI_TONES.has(tone)) {
+                    return aiError("AI_INVALID_REQUEST", 400, corsHeaders, "Invalid AI optimize request");
+                }
+
+                const quota = await getAIQuotaStatus(request, env, safeUserId);
+                if (!quota.isVip && tone !== "default") {
+                    return aiError("VIP_REQUIRED", 403, corsHeaders, "VIP is required for custom AI tones");
+                }
+                if (quota.remaining <= 0) {
+                    return aiError("AI_QUOTA_EXCEEDED", 429, corsHeaders, "AI quota exceeded");
+                }
+
+                const model = env.AI_MODEL || DEFAULT_AI_MODEL;
+                if (!await reserveAIUsage(env, requestId, safeUserId, "optimize_result", tone, model)) {
+                    return aiError("AI_REQUEST_REPLAY", 409, corsHeaders, "Duplicate AI request");
+                }
+                const reservedQuota = await getAIQuotaStatus(request, env, safeUserId);
+                if (reservedQuota.used > reservedQuota.limit) {
+                    await finishAIUsage(env, requestId, "failed");
+                    return aiError("AI_QUOTA_EXCEEDED", 429, corsHeaders, "AI quota exceeded");
+                }
+
+                try {
+                    const document = sanitizeResultDocument(body.resultDocument);
+                    const inputs = sanitizeUserInputs(body.userInputs);
+                    const optimized = validateOptimizedCopy(await runJSONAI(
+                        env,
+                        `你是中文娱乐海报文案编辑。只输出 JSON 对象，字段必须为 title、subtitle、evidence、resultLevel、quote、finalComment。
+内容要轻松、有传播感、像朋友群里的神评。不得输出威胁、歧视、隐私信息、恶意羞辱、联系方式或身份证件信息。
+evidence 必须是 1 到 3 条字符串。不要改变用户事实，不要解释，不要输出 Markdown。`,
+                        JSON.stringify({ templateId, tone, document, userInputs: inputs }),
+                        OPTIMIZED_COPY_SCHEMA
+                    ));
+                    if (!optimized) {
+                        await finishAIUsage(env, requestId, "failed");
+                        return aiError("AI_INVALID_RESPONSE", 502, corsHeaders, "AI returned invalid content");
+                    }
+                    await finishAIUsage(env, requestId, "succeeded");
+                    return Response.json({
+                        ...optimized,
+                        quota: await getAIQuotaStatus(request, env, safeUserId),
+                    }, { headers: corsHeaders });
+                } catch (error) {
+                    console.error("AI optimize failed:", error);
+                    await finishAIUsage(env, requestId, "failed");
+                    return aiError("AI_UPSTREAM_FAILED", 502, corsHeaders, "AI service is temporarily unavailable");
+                }
+            }
+
+            if (path === "/api/ai/generate-template-copy" && method === "POST") {
+                const body: any = await request.json();
+                const requestId = safeText(body.requestId, 128);
+                const templateTitle = safePromptText(body.templateTitle, 15);
+                const category = safePromptText(body.category, 16);
+                const tone = safeText(body.tone || "default", 20);
+                if (!requestId || !templateTitle || !category || !ALLOWED_AI_TONES.has(tone)) {
+                    return aiError("AI_INVALID_REQUEST", 400, corsHeaders, "Invalid AI template request");
+                }
+
+                const quota = await getAIQuotaStatus(request, env, safeUserId);
+                if (!quota.isVip) {
+                    return aiError("VIP_REQUIRED", 403, corsHeaders, "VIP is required for template copy generation");
+                }
+                if (quota.remaining <= 0) {
+                    return aiError("AI_QUOTA_EXCEEDED", 429, corsHeaders, "AI quota exceeded");
+                }
+
+                const model = env.AI_MODEL || DEFAULT_AI_MODEL;
+                if (!await reserveAIUsage(env, requestId, safeUserId, "generate_template_copy", tone, model)) {
+                    return aiError("AI_REQUEST_REPLAY", 409, corsHeaders, "Duplicate AI request");
+                }
+                const reservedQuota = await getAIQuotaStatus(request, env, safeUserId);
+                if (reservedQuota.used > reservedQuota.limit) {
+                    await finishAIUsage(env, requestId, "failed");
+                    return aiError("AI_QUOTA_EXCEEDED", 429, corsHeaders, "AI quota exceeded");
+                }
+
+                try {
+                    const generated = validateTemplateCopy(await runJSONAI(
+                        env,
+                        `你是中文互动玩法策划。只输出 JSON 对象，字段必须为 stats、evidencePool、finalPool、levels。
+stats 为 2 到 4 个短指标名称；evidencePool 为至少 3 条轻松证据；finalPool 为至少 2 条海报结论；levels 为至少 2 个结果等级。
+内容要适合朋友间娱乐分享，不得输出威胁、歧视、隐私信息、恶意羞辱或联系方式。不要解释，不要输出 Markdown。`,
+                        JSON.stringify({ templateTitle, category, tone }),
+                        TEMPLATE_COPY_SCHEMA
+                    ));
+                    if (!generated) {
+                        await finishAIUsage(env, requestId, "failed");
+                        return aiError("AI_INVALID_RESPONSE", 502, corsHeaders, "AI returned invalid content");
+                    }
+                    await finishAIUsage(env, requestId, "succeeded");
+                    return Response.json({
+                        ...generated,
+                        quota: await getAIQuotaStatus(request, env, safeUserId),
+                    }, { headers: corsHeaders });
+                } catch (error) {
+                    console.error("AI template copy failed:", error);
+                    await finishAIUsage(env, requestId, "failed");
+                    return aiError("AI_UPSTREAM_FAILED", 502, corsHeaders, "AI service is temporarily unavailable");
+                }
+            }
+
             // ---- PROTECTED CREATOR ENDPOINTS ----
             if (path === "/api/creator/dashboard" && method === "GET") {
                 const publishedCount = await env.DB.prepare("SELECT COUNT(*) as c FROM templates WHERE author_id = ? AND status = 'published'").bind(safeUserId).first("c") || 0;
@@ -357,11 +721,14 @@ export default {
                 }
 
                 // Ensure owner
-                const check = await env.DB.prepare("SELECT id FROM templates WHERE id = ? AND author_id = ?").bind(id, safeUserId).first();
+                const check: any = await env.DB.prepare("SELECT id, cover_image FROM templates WHERE id = ? AND author_id = ?").bind(id, safeUserId).first();
                 if (!check) return Response.json({ error: "Forbidden" }, { status: 403, headers: corsHeaders });
 
                 if (method === "DELETE" && !action) {
                     await env.DB.prepare("DELETE FROM templates WHERE id = ?").bind(id).run();
+                    await env.DB.prepare("DELETE FROM template_stats WHERE template_id = ?").bind(id).run();
+                    const coverKey = imageKeyFromUrl(s(check.cover_image));
+                    if (coverKey) await env.BUCKET.delete(coverKey);
                     return Response.json({ success: true }, { headers: corsHeaders });
                 }
                 if (method === "POST" && action === "hide") {

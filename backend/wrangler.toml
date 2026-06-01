@@ -14,3 +14,10 @@ database_id = "4c2bdb28-3cc1-4a41-bed1-c7eef44e1748"
 [[r2_buckets]]
 binding = "BUCKET"
 bucket_name = "zhenghuoju-images"
+
+[ai]
+binding = "AI"
+
+[vars]
+AI_MODEL = "@cf/meta/llama-3.1-8b-instruct-fast"
+ALLOW_DEBUG_VIP = "false"

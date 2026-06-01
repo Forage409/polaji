@@ -43,6 +43,8 @@ CREATE TABLE IF NOT EXISTS works (
 CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
     install_token_hash TEXT NOT NULL,
+    vip_until DATETIME,
+    vip_plan TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -52,3 +54,15 @@ CREATE TABLE IF NOT EXISTS work_likes (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (work_id, user_id)
 );
+
+CREATE TABLE IF NOT EXISTS ai_usage (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    feature TEXT NOT NULL,
+    tone TEXT NOT NULL,
+    status TEXT NOT NULL,
+    model TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_ai_usage_user_created_at ON ai_usage(user_id, created_at);

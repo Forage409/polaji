@@ -3,6 +3,8 @@ import SwiftUI
 struct ResultFineTunePanel: View {
     @Binding var document: ResultCardDocument
     let allowedThemeIds: [String]
+    var onLockedThemeTap: (() -> Void)? = nil
+    @ObservedObject private var vip = VipManager.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -30,15 +32,7 @@ struct ResultFineTunePanel: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(availableThemes) { pack in
-                            Button(action: { document.applyTheme(pack.id, randomize: true) }) {
-                                Text(pack.displayName)
-                                    .font(.system(size: 12, weight: .bold))
-                                    .foregroundColor(.themeTextMain)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 8)
-                                    .background(document.themePackId == pack.id ? Color.themePrimary : Color.white)
-                                    .cornerRadius(14)
-                            }
+                            themeButton(pack)
                         }
                     }
                 }
@@ -120,6 +114,32 @@ struct ResultFineTunePanel: View {
     private var availableThemes: [ResultThemePack] {
         let ids = allowedThemeIds.isEmpty ? [document.themePackId] : allowedThemeIds
         return ResultThemePack.all.filter { ids.contains($0.id) }
+    }
+
+    private func themeButton(_ pack: ResultThemePack) -> some View {
+        let locked = !vip.isVip && !VipManager.basicThemePackIds.contains(pack.id)
+        return Button {
+            if locked {
+                onLockedThemeTap?()
+            } else {
+                document.applyTheme(pack.id, randomize: true)
+            }
+        } label: {
+            HStack(spacing: 5) {
+                if locked {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 10))
+                }
+                Text(pack.displayName)
+            }
+            .font(.system(size: 12, weight: .bold))
+            .foregroundColor(locked ? .themeTextSecondary : .themeTextMain)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(document.themePackId == pack.id ? Color.themePrimary : Color.white)
+            .cornerRadius(14)
+            .opacity(locked ? 0.72 : 1)
+        }
     }
 
     private func editorSection<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {

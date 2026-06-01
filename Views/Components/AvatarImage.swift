@@ -4,22 +4,29 @@ struct AvatarImage: View {
     let name: String
     
     var body: some View {
-        if name.hasPrefix("custom_") {
+        if name.hasPrefix("http://") || name.hasPrefix("https://") {
+            CachedAsyncImage(url: RemoteImageURL.resolve(name)) { image in
+                image.resizable()
+            } placeholder: {
+                placeholder
+            }
+        } else if name.hasPrefix("custom_") {
             if let image = ImageExportManager.shared.loadImage(from: name) {
                 Image(uiImage: image)
                     .resizable()
             } else {
-                Image(systemName: "person.crop.circle.fill")
-                    .resizable()
-                    .foregroundColor(Color.gray.opacity(0.5))
+                placeholder
             }
         } else if name.isEmpty {
-            Image(systemName: "person.crop.circle.fill")
-                .resizable()
-                .foregroundColor(Color.gray.opacity(0.5))
+            placeholder
         } else {
             Image.bundle(name)
                 .resizable()
         }
+    }
+
+    private var placeholder: some View {
+        Image.bundle("logo")
+            .resizable()
     }
 }

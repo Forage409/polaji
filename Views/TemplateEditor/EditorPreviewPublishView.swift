@@ -108,7 +108,7 @@ struct EditorPreviewPublishView: View {
                     if success {
                         self.alertMsg = "发布成功！"
                         self.showAlert = true
-                        NotificationCenter.default.post(name: NSNotification.Name("RefreshFeed"), object: nil)
+                        AppEvents.postTemplatesChanged()
                         dismissAction()
                     } else {
                         self.alertMsg = "发布失败，请检查网络"

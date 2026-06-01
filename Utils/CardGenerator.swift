@@ -69,7 +69,7 @@ class CardGenerator {
         let participants = participantsStr.isEmpty ? [] : participantsStr.components(separatedBy: ",")
         
         let id = UUID().uuidString
-        let date = DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .short)
+        let date = LocalTimeFormatter.now()
         
         var title = ""
         var subtitle = ""

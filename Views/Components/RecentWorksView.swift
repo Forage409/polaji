@@ -76,7 +76,7 @@ struct RecentWorksView: View {
                                     .clipShape(RoundedRectangle(cornerRadius: 12))
                                     
                                     HStack {
-                                        Text(work.createdAt)
+                                        Text(LocalTimeFormatter.display(work.createdAt))
                                             .font(.system(size: 11))
                                             .foregroundColor(.themeTextSecondary)
                                             .lineLimit(1)

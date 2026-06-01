@@ -1,262 +1,184 @@
 import SwiftUI
- 
-struct PayWallPlan: Identifiable, Hashable {
-    let id: String
-    let title: String
-    let price: String
-    let originalPrice: String?
-    let badge: String?
-    let perDayHint: String?
-    let durationLabel: String
-    let highlight: Bool
-}
- 
-struct PayWallView: View {
-    @ObservedObject private var vip = VipManager.shared
-    @Environment(\.presentationMode) var presentationMode
-    
-    @State private var selectedPlanId: String = "lifetime"
-    @State private var showPurchaseAlert = false
-    
-    private let plans: [PayWallPlan] = [
-        PayWallPlan(id: "monthly", title: "月度会员", price: "¥8", originalPrice: "¥18", badge: nil, perDayHint: "约 ¥0.27/天", durationLabel: "30 天", highlight: false),
-        PayWallPlan(id: "yearly", title: "年度会员", price: "¥38", originalPrice: "¥98", badge: "省 60%", perDayHint: "约 ¥0.10/天", durationLabel: "365 天", highlight: false),
-        PayWallPlan(id: "lifetime", title: "永久会员", price: "¥68", originalPrice: "¥198", badge: "最划算", perDayHint: "一次买断，终身使用", durationLabel: "永久", highlight: true)
-    ]
-    
-    private let benefits: [(String, String, String)] = [
-        ("nosign", "去除水印", "保存导出的整活卡片不再带「整活局」水印"),
-        ("edit", "官方玩法自定义文案", "在官方玩法生成前补充一段专属文案")
-    ]
-    
-    var body: some View {
-        ZStack {
-            LinearGradient(gradient: Gradient(colors: [Color(hex: "FFF6D6"), Color(hex: "FFFCEC"), Color.themeBackground]), startPoint: .top, endPoint: .bottom)
-                .edgesIgnoringSafeArea(.all)
-            
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 20) {
-                    heroSection
-                    benefitGrid
-                    plansSection
-                    Text("内购为虚拟服务，购买后不支持退款。会员仅供本地体验，未来接入正式支付通道。")
-                        .font(.system(size: 11))
-                        .foregroundColor(.themeTextSecondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 30)
-                        .padding(.top, 4)
-                    Spacer(minLength: 120)
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 12)
-            }
-            
-            VStack {
-                Spacer()
-                purchaseBar
-            }
-        }
-        .navigationTitle("开通整活局 VIP")
-        .navigationBarTitleDisplayMode(.inline)
-        .alert(isPresented: $showPurchaseAlert) {
-            Alert(
-                title: Text("支付通道即将开放"),
-                message: Text("当前为前端体验版，购买功能将在正式版接入 App Store 内购。\n\n如果你希望立刻体验 VIP 权益（去水印等），可前往「设置」开启调试 VIP 开关。"),
-                dismissButton: .default(Text("我知道了"))
-            )
+
+enum VIPPaywallContext {
+    case general
+    case aiTrial
+    case quota
+    case tone
+    case watermark
+    case theme
+    case publisherAI
+
+    var subtitle: String {
+        switch self {
+        case .aiTrial: return "先看看 AI 能把这张结果图改得多有梗。"
+        case .quota: return "免费 AI 次数已用完，升级后每天可以优化更多次。"
+        case .tone: return "VIP 可以把结果切换成毒舌、可爱、抽象、正经或朋友圈风。"
+        case .watermark: return "VIP 导出的结果图不带水印，更适合直接分享。"
+        case .theme: return "VIP 可以解锁全部潮流手绘主题包。"
+        case .publisherAI: return "VIP 发布者可以让 AI 自动生成整套玩法文案。"
+        case .general: return "用 AI 把普通结果变成更适合分享的朋友圈神评。"
         }
     }
-    
-    private var heroSection: some View {
-        VStack(spacing: 12) {
-            HStack(alignment: .center, spacing: 10) {
-                Image.bundle("vip_icon")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 44, height: 44)
-                Text("整活局 VIP")
-                    .font(.system(size: 26, weight: .heavy))
-                    .foregroundColor(.themeTextMain)
+}
+
+struct VIPPaywallView: View {
+    let context: VIPPaywallContext
+    let freeTrialRemaining: Int?
+    let onTryFree: (() -> Void)?
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedPlan = "yearly"
+    @State private var showPlaceholderAlert = false
+
+    init(
+        context: VIPPaywallContext = .general,
+        freeTrialRemaining: Int? = nil,
+        onTryFree: (() -> Void)? = nil
+    ) {
+        self.context = context
+        self.freeTrialRemaining = freeTrialRemaining
+        self.onTryFree = onTryFree
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                hero
+                benefits
+                plans
+                actionArea
+                legalLinks
             }
-            Text(vip.isVip ? "你已是 VIP — \(vip.expiryDisplay)" : "去除水印，体验官方玩法自定义文案")
+            .padding(20)
+        }
+        .background(
+            LinearGradient(
+                colors: [Color(hex: "FFF4C9"), Color(hex: "FFF9E8"), Color.themeBackground],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+        )
+        .navigationTitle("整活局 VIP")
+        .navigationBarTitleDisplayMode(.inline)
+        .alert("订阅通道即将开放", isPresented: $showPlaceholderAlert) {
+            Button("知道了", role: .cancel) {}
+        } message: {
+            Text("本轮已接通真实 AI 能力和次数限制。App Store 订阅与恢复购买将在正式上架配置完成后开放。")
+        }
+    }
+
+    private var hero: some View {
+        VStack(spacing: 12) {
+            Image.bundle("vip_icon")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 58, height: 58)
+            Text("让结果更好笑，更像人写的")
+                .font(.system(size: 25, weight: .heavy))
+                .multilineTextAlignment(.center)
+            Text(context.subtitle)
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(.themeTextSecondary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 24)
-        .background(
-            RoundedRectangle(cornerRadius: 24)
-                .fill(Color.white.opacity(0.55))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 24)
-                        .stroke(Color.themePrimary.opacity(0.4), lineWidth: 1)
-                )
-        )
-    }
-    
-    private var benefitGrid: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("会员特权")
-                .font(.system(size: 17, weight: .bold))
-                .foregroundColor(.themeTextMain)
-                .padding(.horizontal, 4)
-            
-            LazyVGrid(
-                columns: [
-                    GridItem(.flexible(), spacing: 12, alignment: .top),
-                    GridItem(.flexible(), spacing: 12, alignment: .top)
-                ],
-                spacing: 12
-            ) {
-                ForEach(0..<benefits.count, id: \.self) { idx in
-                    let item = benefits[idx]
-                    VStack(alignment: .leading, spacing: 8) {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(Color.themePrimary.opacity(0.18))
-                                .frame(width: 36, height: 36)
-                            Image(systemName: symbolFor(item.0))
-                                .font(.system(size: 18, weight: .bold))
-                                .foregroundColor(Color(hex: "B58900"))
-                        }
-                        Text(item.1)
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundColor(.themeTextMain)
-                        Text(item.2)
-                            .font(.system(size: 11))
-                            .foregroundColor(.themeTextSecondary)
-                            .lineLimit(2)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .padding(14)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    .background(Color.white)
-                    .cornerRadius(14)
-                    .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 2)
-                }
-            }
-        }
-    }
-    
-    private var plansSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("选择套餐")
-                .font(.system(size: 17, weight: .bold))
-                .foregroundColor(.themeTextMain)
-                .padding(.horizontal, 4)
-            
-            HStack(spacing: 10) {
-                ForEach(plans) { plan in
-                    planCard(plan)
-                        .onTapGesture {
-                            selectedPlanId = plan.id
-                        }
-                }
-            }
-        }
-    }
-    
-    private func planCard(_ plan: PayWallPlan) -> some View {
-        let isSelected = plan.id == selectedPlanId
-        return VStack(spacing: 6) {
-            if let badge = plan.badge {
-                Text(badge)
-                    .font(.system(size: 10, weight: .heavy))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Color.themeWarningPink)
-                    .cornerRadius(8)
-            } else {
-                Color.clear.frame(height: 16)
-            }
-            Text(plan.title)
-                .font(.system(size: 14, weight: .bold))
-                .foregroundColor(.themeTextMain)
-            Text(plan.price)
-                .font(.system(size: 26, weight: .heavy))
-                .foregroundColor(isSelected ? Color(hex: "B58900") : .themeTextMain)
-            if let original = plan.originalPrice {
-                Text(original)
-                    .font(.system(size: 11))
-                    .foregroundColor(.themeTextSecondary)
-                    .strikethrough(true, color: .themeTextSecondary)
-            }
-            Text(plan.perDayHint ?? plan.durationLabel)
-                .font(.system(size: 10))
-                .foregroundColor(.themeTextSecondary)
                 .multilineTextAlignment(.center)
-                .lineLimit(2)
-                .padding(.top, 2)
-                .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.vertical, 14)
         .frame(maxWidth: .infinity)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(isSelected ? Color.themePrimary.opacity(0.18) : Color.white)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(isSelected ? Color.themePrimary : Color.gray.opacity(0.15), lineWidth: isSelected ? 2 : 1)
-                )
-        )
+        .padding(.vertical, 18)
     }
-    
-    private var purchaseBar: some View {
-        VStack(spacing: 8) {
-            Button(action: { showPurchaseAlert = true }) {
+
+    private var benefits: some View {
+        let items = [
+            ("wand.and.stars", "AI 爆梗优化"),
+            ("quote.bubble.fill", "AI 换语气"),
+            ("doc.text.fill", "AI 帮写玩法"),
+            ("drop.fill", "去水印"),
+            ("paintpalette.fill", "全部主题包"),
+            ("arrow.clockwise.circle.fill", "更多 AI 次数")
+        ]
+        return LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+            ForEach(items, id: \.1) { item in
                 HStack(spacing: 8) {
-                    Image.bundle("vip_icon")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 20, height: 20)
-                    Text(vip.isVip ? "续费 / 升级" : "立即开通 \(currentPlan.price)")
-                        .font(.system(size: 17, weight: .heavy))
+                    Image(systemName: item.0)
+                        .foregroundColor(Color(hex: "B58900"))
+                    Text(item.1)
+                        .font(.system(size: 13, weight: .bold))
+                    Spacer(minLength: 0)
+                }
+                .padding(12)
+                .background(Color.white.opacity(0.9))
+                .cornerRadius(12)
+            }
+        }
+    }
+
+    private var plans: some View {
+        HStack(spacing: 12) {
+            planCard(id: "monthly", title: "月度 VIP", price: "¥8", hint: "每月自动续费")
+            planCard(id: "yearly", title: "年度 VIP", price: "¥38", hint: "更划算")
+        }
+    }
+
+    private func planCard(id: String, title: String, price: String, hint: String) -> some View {
+        let selected = selectedPlan == id
+        return Button(action: { selectedPlan = id }) {
+            VStack(spacing: 7) {
+                Text(title).font(.system(size: 15, weight: .bold))
+                Text(price).font(.system(size: 28, weight: .heavy))
+                Text(hint).font(.system(size: 11)).foregroundColor(.themeTextSecondary)
+            }
+            .foregroundColor(.themeTextMain)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background(selected ? Color.themePrimary.opacity(0.24) : Color.white)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(selected ? Color.themePrimary : Color.gray.opacity(0.12), lineWidth: selected ? 2 : 1)
+            )
+            .cornerRadius(16)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var actionArea: some View {
+        VStack(spacing: 12) {
+            Button(action: { showPlaceholderAlert = true }) {
+                Text("立即开通")
+                    .font(.system(size: 17, weight: .heavy))
+                    .foregroundColor(.themeTextMain)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 54)
+                    .background(Color.themePrimary)
+                    .cornerRadius(27)
+            }
+
+            if let onTryFree {
+                Button {
+                    VipManager.shared.markAITrialPaywallSeen()
+                    dismiss()
+                    onTryFree()
+                } label: {
+                    Text("先免费优化一次，今日剩余 \(freeTrialRemaining ?? 3) 次")
+                        .font(.system(size: 14, weight: .bold))
                         .foregroundColor(.themeTextMain)
                 }
-                .frame(maxWidth: .infinity)
-                .frame(height: 54)
-                .background(
-                    LinearGradient(gradient: Gradient(colors: [Color(hex: "FFE070"), Color(hex: "FFD43B")]), startPoint: .leading, endPoint: .trailing)
-                )
-                .cornerRadius(27)
-                .shadow(color: Color.themePrimary.opacity(0.4), radius: 10, x: 0, y: 4)
             }
-            HStack(spacing: 16) {
-                Button("恢复购买") { showPurchaseAlert = true }
-                    .font(.system(size: 12))
-                    .foregroundColor(.themeTextSecondary)
-                Text("·").foregroundColor(.themeTextSecondary)
-                NavigationLink("用户协议") { LegalDocView(kind: .terms) }
-                    .font(.system(size: 12))
-                    .foregroundColor(.themeTextSecondary)
-                Text("·").foregroundColor(.themeTextSecondary)
-                NavigationLink("隐私政策") { LegalDocView(kind: .privacy) }
-                    .font(.system(size: 12))
-                    .foregroundColor(.themeTextSecondary)
-            }
+
+            Button("恢复购买") { showPlaceholderAlert = true }
+                .font(.system(size: 13))
+                .foregroundColor(.themeTextSecondary)
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 12)
-        .padding(.bottom, 20)
-        .background(
-            LinearGradient(gradient: Gradient(colors: [Color.white.opacity(0), Color.white]), startPoint: .top, endPoint: .bottom)
-        )
     }
-    
-    private var currentPlan: PayWallPlan {
-        plans.first(where: { $0.id == selectedPlanId }) ?? plans[2]
-    }
-    
-    private func symbolFor(_ key: String) -> String {
-        switch key {
-        case "nosign": return "nosign"
-        case "infinity": return "infinity"
-        case "crown": return "crown.fill"
-        case "hd": return "rectangle.compress.vertical"
-        case "paint": return "paintpalette.fill"
-        case "edit": return "square.and.pencil"
-        default: return "sparkles"
+
+    private var legalLinks: some View {
+        HStack(spacing: 12) {
+            NavigationLink("用户协议") { LegalDocView(kind: .terms) }
+            Text("·")
+            NavigationLink("隐私政策") { LegalDocView(kind: .privacy) }
         }
+        .font(.system(size: 12))
+        .foregroundColor(.themeTextSecondary)
     }
 }
+
+typealias PayWallView = VIPPaywallView

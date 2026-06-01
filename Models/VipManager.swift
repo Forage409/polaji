@@ -7,6 +7,11 @@ final class VipManager: ObservableObject {
     private let isVipKey = "ZhengHuoJu_IsVip"
     private let vipExpiryKey = "ZhengHuoJu_VipExpiry"
     private let vipPlanKey = "ZhengHuoJu_VipPlan"
+    private let aiTrialPaywallKey = "ZhengHuoJu_AITrialPaywallSeen"
+    private let generationCountKey = "ZhengHuoJu_GenerationCount"
+    private let generationUpgradeKey = "ZhengHuoJu_GenerationUpgradeSeen"
+
+    static let basicThemePackIds: Set<String> = ["dreamy_persona", "pop_party", "pink_crush"]
     
     @Published var isVip: Bool {
         didSet { UserDefaults.standard.set(isVip, forKey: isVipKey) }
@@ -51,6 +56,24 @@ final class VipManager: ObservableObject {
         } else {
             activate(plan: "调试 VIP", expiry: nil)
         }
+    }
+
+    func shouldPresentAITrialPaywall() -> Bool {
+        !isVip && !UserDefaults.standard.bool(forKey: aiTrialPaywallKey)
+    }
+
+    func markAITrialPaywallSeen() {
+        UserDefaults.standard.set(true, forKey: aiTrialPaywallKey)
+    }
+
+    func recordGenerationAndShouldSuggestUpgrade() -> Bool {
+        guard !isVip else { return false }
+        let defaults = UserDefaults.standard
+        let nextCount = defaults.integer(forKey: generationCountKey) + 1
+        defaults.set(nextCount, forKey: generationCountKey)
+        guard nextCount >= 3, !defaults.bool(forKey: generationUpgradeKey) else { return false }
+        defaults.set(true, forKey: generationUpgradeKey)
+        return true
     }
     
     var expiryDisplay: String {

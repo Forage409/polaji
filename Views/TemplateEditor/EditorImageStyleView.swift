@@ -2,6 +2,9 @@ import SwiftUI
 
 struct EditorImageStyleView: View {
     @ObservedObject var draft: TemplateDraft
+    @ObservedObject private var vip = VipManager.shared
+    @State private var showingAIWriter = false
+    @State private var showingPaywall = false
 
     private var previewDocument: ResultCardDocument {
         ResultCardDocument.preview(config: draft.resultConfig, title: draft.title, fields: draft.fields)
@@ -11,6 +14,7 @@ struct EditorImageStyleView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 header
+                aiWriterEntry
 
                 UnifiedResultCardUI(document: previewDocument)
                     .frame(maxWidth: .infinity)
@@ -43,6 +47,51 @@ struct EditorImageStyleView: View {
             }
             .padding(.vertical, 16)
         }
+        .sheet(isPresented: $showingAIWriter) {
+            AITemplateCopySheet(draft: draft)
+        }
+        .sheet(isPresented: $showingPaywall) {
+            NavigationStack {
+                VIPPaywallView(context: .publisherAI)
+            }
+        }
+    }
+
+    private var aiWriterEntry: some View {
+        Button {
+            if vip.isVip {
+                showingAIWriter = true
+            } else {
+                showingPaywall = true
+            }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "wand.and.stars")
+                    .foregroundColor(Color(hex: "7B61FF"))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("AI 帮写玩法文案库")
+                        .font(.system(size: 14, weight: .bold))
+                    Text(draft.resultConfig.copyLibrary == nil ? "自动生成指标、证据和结论" : "已采用 AI 文案，可继续重新生成")
+                        .font(.system(size: 12))
+                        .foregroundColor(.themeTextSecondary)
+                }
+                Spacer()
+                if !vip.isVip {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 12))
+                        .foregroundColor(.themeTextSecondary)
+                }
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.themeTextSecondary)
+            }
+            .foregroundColor(.themeTextMain)
+            .padding(14)
+            .background(Color.white)
+            .cornerRadius(14)
+            .padding(.horizontal, 20)
+        }
+        .buttonStyle(.plain)
     }
 
     private var header: some View {

@@ -61,7 +61,7 @@ struct ResultCardUI: View {
                             .font(.system(size: 10))
                             .foregroundColor(headerTextColor.opacity(0.5))
                         Spacer()
-                        Text(card.createdAt)
+                        Text(LocalTimeFormatter.display(card.createdAt))
                             .font(.system(size: 10))
                             .foregroundColor(headerTextColor.opacity(0.5))
                     }
