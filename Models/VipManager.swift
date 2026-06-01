@@ -58,6 +58,16 @@ final class VipManager: ObservableObject {
         }
     }
 
+    func applyServerStatus(isVip: Bool, plan: String, until: String) {
+        planName = plan
+        if let date = ISO8601DateFormatter().date(from: until) {
+            expiryDate = date
+        } else {
+            expiryDate = nil
+        }
+        self.isVip = isVip
+    }
+
     func shouldPresentAITrialPaywall() -> Bool {
         !isVip && !UserDefaults.standard.bool(forKey: aiTrialPaywallKey)
     }

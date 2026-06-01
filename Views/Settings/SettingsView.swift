@@ -2,12 +2,14 @@ import SwiftUI
  
 struct SettingsView: View {
     @ObservedObject private var vip = VipManager.shared
+    @ObservedObject private var session = AccountSessionManager.shared
     
     @State private var cacheSize: Int64 = 0
     @State private var isClearing = false
     @State private var showClearAlert = false
     @State private var showClearResult = false
     @State private var clearResultMessage = ""
+    @State private var showDeleteConfirm = false
     
     private var version: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0.0"
@@ -42,11 +44,25 @@ struct SettingsView: View {
                 
                 section(title: "云端服务") {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("公开作品会同步到整活局云端；点赞数会提交到云端，已点赞状态仅保存在当前设备。")
+                        Text("账号资料、发布玩法、公开作品、创作者分析和 VIP 状态会同步到整活局云端。浏览历史和未发布的本地作品仍只保存在当前设备。")
                             .font(.system(size: 12))
                             .foregroundColor(.themeTextSecondary)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 12)
+                    }
+                }
+
+                section(title: "账号") {
+                    Button {
+                        Task { await session.logout() }
+                    } label: {
+                        row(title: "退出登录", subtitle: "保留云端账号数据，可重新登录恢复", trailing: .chevron)
+                    }
+                    divider()
+                    Button(role: .destructive) {
+                        showDeleteConfirm = true
+                    } label: {
+                        row(title: "注销账号", subtitle: "撤销登录并按隐私政策处理云端数据", trailing: .chevron)
                     }
                 }
                 
@@ -110,6 +126,24 @@ struct SettingsView: View {
             Button("好的", role: .cancel) {}
         } message: {
             Text(clearResultMessage)
+        }
+        .confirmationDialog("确认注销账号？", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+            Button("注销账号", role: .destructive) {
+                Task {
+                    do {
+                        try await AccountService.shared.deleteAccount()
+                        await MainActor.run { session.clearLocalSession() }
+                    } catch {
+                        await MainActor.run {
+                            clearResultMessage = "注销失败，请检查网络后重试。"
+                            showClearResult = true
+                        }
+                    }
+                }
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("注销后当前会话会失效，本人发布的玩法会隐藏，历史公开作品会匿名化。该操作无法直接撤销。")
         }
     }
     

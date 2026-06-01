@@ -22,7 +22,7 @@ class PublicWorksService {
         } catch APIError.notFound {
             // Compatibility for an older Worker that has not deployed
             // /api/creator/works yet. Older feeds still exposed the owner ID.
-            let currentUserId = AnonymousIdentityManager.shared.currentUserId
+            let currentUserId = AccountSessionManager.shared.currentUserId
             let visibleWorks = try await fetchWorksFeed(limit: 50)
             return visibleWorks.filter { $0.authorId == currentUserId }
         }

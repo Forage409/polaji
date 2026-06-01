@@ -20,4 +20,4 @@ binding = "AI"
 
 [vars]
 AI_MODEL = "@cf/meta/llama-3.1-8b-instruct-fast"
-ALLOW_DEBUG_VIP = "false"
+ALLOW_DEBUG_VIP = "true"

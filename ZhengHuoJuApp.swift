@@ -6,7 +6,7 @@ struct ZhengHuoJuApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            AccountGateView()
                 .onChange(of: scenePhase) { phase in
                     guard phase == .active else { return }
                     AppNotificationManager.shared.refresh()

@@ -17,10 +17,10 @@ class APIClient {
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         
-        // Inject identity headers
-        let identityManager = AnonymousIdentityManager.shared
-        request.setValue(identityManager.currentUserId, forHTTPHeaderField: "X-Anonymous-User-Id")
-        request.setValue("Bearer \(identityManager.currentInstallToken)", forHTTPHeaderField: "Authorization")
+        // Account session tokens are stored in Keychain. Public requests can omit this header.
+        if let authorization = AccountSessionManager.shared.authorizationHeader {
+            request.setValue(authorization, forHTTPHeaderField: "Authorization")
+        }
         if VipManager.shared.isVip {
             request.setValue("true", forHTTPHeaderField: "X-Debug-Vip")
         }

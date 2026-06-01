@@ -28,22 +28,22 @@ final class UserProfileStore: ObservableObject {
     private init() {
         let defaults = UserDefaults.standard
         self.nickname = defaults.string(forKey: nicknameKey) ?? "整活新人"
-        let stableId = UserProfileStore.stableDisplayUserId()
-        defaults.set(stableId, forKey: userIdKey)
-        self.userId = stableId
+        self.userId = defaults.string(forKey: userIdKey) ?? ""
         self.bio = defaults.string(forKey: bioKey) ?? "和朋友一起整活，好玩又有梗 ✨"
         self.avatarName = defaults.string(forKey: avatarNameKey) ?? "logo"
     }
-    
-    private static func stableDisplayUserId() -> String {
-        String(
-            AnonymousIdentityManager.shared.currentUserId
-                .replacingOccurrences(of: "-", with: "")
-                .prefix(8)
-        ).uppercased()
+
+    func apply(profile: AccountProfile) {
+        nickname = profile.nickname
+        userId = profile.displayId
+        bio = profile.bio
+        avatarName = profile.avatar
     }
-    
-    func resetIdForDebug() {
-        userId = UserProfileStore.stableDisplayUserId()
+
+    func resetCachedProfile() {
+        nickname = "整活新人"
+        userId = ""
+        bio = "和朋友一起整活，好玩又有梗 ✨"
+        avatarName = "logo"
     }
 }

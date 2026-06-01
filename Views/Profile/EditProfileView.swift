@@ -195,17 +195,20 @@ struct EditProfileView: View {
         Task {
             do {
                 let finalAvatar = try await uploadAvatarIfNeeded(draftAvatar)
+                let updated = try await AccountService.shared.updateProfile(
+                    nickname: trimmed,
+                    bio: draftBio.trimmingCharacters(in: .whitespacesAndNewlines),
+                    avatar: finalAvatar
+                )
                 await MainActor.run {
-                    profile.nickname = trimmed
-                    profile.bio = draftBio.trimmingCharacters(in: .whitespacesAndNewlines)
-                    profile.avatarName = finalAvatar
+                    AccountSessionManager.shared.apply(profile: updated)
                     isSaving = false
                     presentationMode.wrappedValue.dismiss()
                 }
             } catch {
                 await MainActor.run {
                     isSaving = false
-                    saveAlertMessage = "头像上传失败，请检查网络后重试"
+                    saveAlertMessage = "资料保存失败，请检查网络后重试"
                     showSaveAlert = true
                 }
             }

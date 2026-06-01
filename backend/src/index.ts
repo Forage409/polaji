@@ -4,6 +4,13 @@ export interface Env {
     AI: any;
     AI_MODEL?: string;
     ALLOW_DEBUG_VIP?: string;
+    AUTH_HASH_PEPPER?: string;
+    ALIYUN_ACCESS_KEY_ID?: string;
+    ALIYUN_ACCESS_KEY_SECRET?: string;
+    ALIYUN_SMS_SCHEME_NAME?: string;
+    ALIYUN_SMS_SIGN_NAME?: string;
+    ALIYUN_SMS_TEMPLATE_CODE?: string;
+    ALIYUN_SMS_TEMPLATE_PARAM?: string;
 }
 
 // Safe binding helpers: D1 throws D1_TYPE_ERROR if any bind value is undefined.
@@ -30,6 +37,11 @@ function isTextWithin(value: any, maxLength: number, allowEmpty: boolean = false
 
 function isAllowedTemplateStatus(value: any): boolean {
     return ['draft', 'published', 'hidden'].includes(s(value));
+}
+
+function isAllowedAvatar(value: any): boolean {
+    const avatar = cleanText(value);
+    return avatar === 'logo' || avatar.startsWith('theme_') || /^https:\/\/zhenghuo\.miaogou\.site\/api\/images\//.test(avatar);
 }
 
 function serializeConfig(rawValue: any, fallbackValue: any): string {
@@ -214,7 +226,8 @@ async function getAIQuotaStatus(request: Request, env: Env, userId: string): Pro
     await ensureAIUsageTable(env);
     let user: any = null;
     try {
-        user = await env.DB.prepare("SELECT vip_until FROM users WHERE id = ?").bind(userId).first();
+        user = await env.DB.prepare("SELECT vip_until FROM accounts WHERE id = ?").bind(userId).first();
+        if (!user) user = await env.DB.prepare("SELECT vip_until FROM users WHERE id = ?").bind(userId).first();
     } catch {
         // Compatibility during rolling deployment before the vip_until migration lands.
         user = null;
@@ -413,6 +426,243 @@ async function hashToken(token: string): Promise<string> {
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+function normalizePhone(value: any): string {
+    return cleanText(value).replace(/\s+/g, '');
+}
+
+function isValidMainlandPhone(value: any): boolean {
+    return /^1[3-9]\d{9}$/.test(normalizePhone(value));
+}
+
+function maskPhone(phone: string): string {
+    return `${phone.slice(0, 3)}****${phone.slice(-4)}`;
+}
+
+function randomToken(): string {
+    return `${crypto.randomUUID()}${crypto.randomUUID()}`.replace(/-/g, '');
+}
+
+function isoAfterSeconds(seconds: number): string {
+    return new Date(Date.now() + seconds * 1000).toISOString();
+}
+
+async function secureHash(value: string, pepper: string): Promise<string> {
+    return hashToken(`${pepper}:${value}`);
+}
+
+async function hashPassword(password: string, salt: string): Promise<string> {
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey('raw', encoder.encode(password), 'PBKDF2', false, ['deriveBits']);
+    const bits = await crypto.subtle.deriveBits({
+        name: 'PBKDF2',
+        hash: 'SHA-256',
+        salt: encoder.encode(salt),
+        iterations: 120000,
+    }, key, 256);
+    return Array.from(new Uint8Array(bits)).map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function aliyunPercentEncode(value: string): string {
+    return encodeURIComponent(value).replace(/\+/g, '%20').replace(/\*/g, '%2A').replace(/%7E/g, '~');
+}
+
+async function hmacSHA1Base64(secret: string, content: string): Promise<string> {
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey('raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']);
+    const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(content));
+    let binary = '';
+    for (const byte of new Uint8Array(signature)) binary += String.fromCharCode(byte);
+    return btoa(binary);
+}
+
+async function callAliyunDypns(env: Env, action: string, actionParameters: Record<string, string>): Promise<any> {
+    if (!env.ALIYUN_ACCESS_KEY_ID || !env.ALIYUN_ACCESS_KEY_SECRET) {
+        throw new Error('ALIYUN_SMS_NOT_CONFIGURED');
+    }
+    const parameters: Record<string, string> = {
+        AccessKeyId: env.ALIYUN_ACCESS_KEY_ID,
+        Action: action,
+        Format: 'JSON',
+        SignatureMethod: 'HMAC-SHA1',
+        SignatureNonce: crypto.randomUUID(),
+        SignatureVersion: '1.0',
+        Timestamp: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+        Version: '2017-05-25',
+        ...actionParameters,
+    };
+    const canonicalized = Object.keys(parameters)
+        .sort()
+        .map((key) => `${aliyunPercentEncode(key)}=${aliyunPercentEncode(parameters[key])}`)
+        .join('&');
+    const stringToSign = `POST&%2F&${aliyunPercentEncode(canonicalized)}`;
+    const signature = await hmacSHA1Base64(`${env.ALIYUN_ACCESS_KEY_SECRET}&`, stringToSign);
+    const body = new URLSearchParams({ ...parameters, Signature: signature });
+    const response = await fetch('https://dypnsapi.aliyuncs.com/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8' },
+        body,
+    });
+    const json: any = await response.json();
+    if (!response.ok || s(json?.Code) !== 'OK') {
+        console.error('Aliyun Dypns request failed', { action, code: s(json?.Code), requestId: s(json?.RequestId) });
+        throw new Error(`ALIYUN_SMS_FAILED:${s(json?.Code, 'UNKNOWN')}`);
+    }
+    return json;
+}
+
+async function ensureAccountTables(env: Env): Promise<void> {
+    await env.DB.batch([
+        env.DB.prepare(`
+            CREATE TABLE IF NOT EXISTS accounts (
+                id TEXT PRIMARY KEY,
+                phone_hash TEXT NOT NULL UNIQUE,
+                phone_mask TEXT NOT NULL,
+                nickname TEXT NOT NULL,
+                bio TEXT NOT NULL DEFAULT '',
+                avatar_url TEXT NOT NULL DEFAULT 'logo',
+                password_hash TEXT NOT NULL,
+                password_salt TEXT NOT NULL,
+                vip_until DATETIME,
+                vip_plan TEXT,
+                status TEXT NOT NULL DEFAULT 'active',
+                accepted_terms_at DATETIME NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        `),
+        env.DB.prepare(`
+            CREATE TABLE IF NOT EXISTS account_sessions (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                token_hash TEXT NOT NULL UNIQUE,
+                expires_at DATETIME NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                last_seen_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                revoked_at DATETIME
+            )
+        `),
+        env.DB.prepare(`
+            CREATE TABLE IF NOT EXISTS sms_requests (
+                id TEXT PRIMARY KEY,
+                phone_hash TEXT NOT NULL,
+                purpose TEXT NOT NULL,
+                ip_hash TEXT NOT NULL,
+                client_hash TEXT NOT NULL,
+                status TEXT NOT NULL,
+                provider_request_id TEXT,
+                attempt_count INTEGER NOT NULL DEFAULT 0,
+                expires_at DATETIME NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        `),
+        env.DB.prepare(`
+            CREATE TABLE IF NOT EXISTS account_migrations (
+                legacy_user_id TEXT PRIMARY KEY,
+                account_user_id TEXT NOT NULL,
+                migrated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        `),
+        env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_account_sessions_token ON account_sessions(token_hash, expires_at)'),
+        env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_sms_requests_phone_created ON sms_requests(phone_hash, created_at)'),
+        env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_sms_requests_ip_created ON sms_requests(ip_hash, created_at)'),
+    ]);
+}
+
+function accountProfile(row: any): any {
+    const vipUntil = s(row?.vip_until);
+    const isVip = !!vipUntil && !Number.isNaN(Date.parse(vipUntil)) && Date.parse(vipUntil) > Date.now();
+    return {
+        id: s(row?.id),
+        displayId: s(row?.id).replace(/-/g, '').slice(-8).toUpperCase(),
+        phoneMasked: s(row?.phone_mask),
+        nickname: s(row?.nickname, '整活新人'),
+        bio: s(row?.bio),
+        avatar: s(row?.avatar_url, 'logo'),
+        isVip,
+        vipPlan: s(row?.vip_plan),
+        vipUntil,
+    };
+}
+
+async function getAccount(env: Env, userId: string): Promise<any | null> {
+    await ensureAccountTables(env);
+    return env.DB.prepare("SELECT * FROM accounts WHERE id = ? AND status = 'active'").bind(userId).first();
+}
+
+async function getAuthorProfile(env: Env, userId: string, fallbackName: any = '', fallbackAvatar: any = ''): Promise<{ nickname: string; avatar: string }> {
+    const account = await getAccount(env, userId);
+    return account
+        ? { nickname: s(account.nickname, '整活新人'), avatar: s(account.avatar_url, 'logo') }
+        : { nickname: safeText(fallbackName, 12), avatar: safeText(fallbackAvatar, 2048) };
+}
+
+async function createAccountSession(env: Env, userId: string): Promise<string> {
+    const token = randomToken();
+    await env.DB.prepare(`
+        INSERT INTO account_sessions (id, user_id, token_hash, expires_at)
+        VALUES (?, ?, ?, ?)
+    `).bind(crypto.randomUUID(), userId, await hashToken(token), isoAfterSeconds(30 * 24 * 60 * 60)).run();
+    return token;
+}
+
+async function transferLegacyIdentity(env: Env, accountUserId: string, legacyUserId: any, legacyInstallToken: any): Promise<void> {
+    const oldId = cleanText(legacyUserId);
+    const token = cleanText(legacyInstallToken);
+    if (!oldId || !token) return;
+    const oldUser: any = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(oldId).first();
+    if (!oldUser || s(oldUser.install_token_hash) !== await hashToken(token)) return;
+    const existing = await env.DB.prepare('SELECT legacy_user_id FROM account_migrations WHERE legacy_user_id = ?').bind(oldId).first();
+    if (existing) return;
+    await env.DB.batch([
+        env.DB.prepare('UPDATE templates SET author_id = ? WHERE author_id = ?').bind(accountUserId, oldId),
+        env.DB.prepare('UPDATE works SET author_id = ? WHERE author_id = ?').bind(accountUserId, oldId),
+        env.DB.prepare('UPDATE ai_usage SET user_id = ? WHERE user_id = ?').bind(accountUserId, oldId),
+        env.DB.prepare('INSERT INTO account_migrations (legacy_user_id, account_user_id) VALUES (?, ?)').bind(oldId, accountUserId),
+    ]);
+    if (oldUser.vip_until) {
+        await env.DB.prepare('UPDATE accounts SET vip_until = ?, vip_plan = ? WHERE id = ? AND (vip_until IS NULL OR vip_until < ?)')
+            .bind(s(oldUser.vip_until), s(oldUser.vip_plan), accountUserId, s(oldUser.vip_until)).run();
+    }
+}
+
+async function authenticateAccount(request: Request, env: Env): Promise<string | null> {
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) return null;
+    await ensureAccountTables(env);
+    const tokenHash = await hashToken(authHeader.slice(7));
+    const session: any = await env.DB.prepare(`
+        SELECT s.user_id FROM account_sessions s
+        JOIN accounts a ON a.id = s.user_id
+        WHERE s.token_hash = ? AND s.revoked_at IS NULL
+          AND s.expires_at > CURRENT_TIMESTAMP AND a.status = 'active'
+    `).bind(tokenHash).first();
+    return session ? s(session.user_id) : null;
+}
+
+async function verifySMSChallenge(env: Env, challengeId: string, phone: string, purpose: string, code: string): Promise<boolean> {
+    const pepper = s(env.AUTH_HASH_PEPPER);
+    if (!pepper) throw new Error('AUTH_NOT_CONFIGURED');
+    const phoneHash = await secureHash(phone, pepper);
+    const challenge: any = await env.DB.prepare(`
+        SELECT * FROM sms_requests
+        WHERE id = ? AND phone_hash = ? AND purpose = ? AND status = 'sent'
+          AND expires_at > CURRENT_TIMESTAMP
+    `).bind(challengeId, phoneHash, purpose).first();
+    if (!challenge || n(challenge.attempt_count) >= 5) return false;
+    await env.DB.prepare('UPDATE sms_requests SET attempt_count = attempt_count + 1 WHERE id = ?').bind(challengeId).run();
+    const checked = await callAliyunDypns(env, 'CheckSmsVerifyCode', {
+        SchemeName: s(env.ALIYUN_SMS_SCHEME_NAME),
+        CountryCode: '86',
+        PhoneNumber: phone,
+        VerifyCode: code,
+        OutId: challengeId,
+    });
+    const passed = s(checked?.Model?.VerifyResult).toUpperCase() === 'PASS';
+    await env.DB.prepare("UPDATE sms_requests SET status = ? WHERE id = ?")
+        .bind(passed ? 'verified' : 'sent', challengeId).run();
+    return passed;
+}
+
 async function ensureWorkLikesTable(env: Env): Promise<void> {
     await env.DB.prepare(`
         CREATE TABLE IF NOT EXISTS work_likes (
@@ -425,6 +675,9 @@ async function ensureWorkLikesTable(env: Env): Promise<void> {
 }
 
 async function verifyAuth(request: Request, env: Env): Promise<string | null> {
+    const accountUserId = await authenticateAccount(request, env);
+    if (accountUserId) return accountUserId;
+
     const userId = request.headers.get("X-Anonymous-User-Id");
     const authHeader = request.headers.get("Authorization");
 
@@ -468,7 +721,122 @@ export default {
         try {
             // ---- PUBLIC ENDPOINTS ----
 
-            // 1. Auth Device
+            // 1. Phone Account Authentication
+            if (path === "/api/auth/sms/send" && method === "POST") {
+                await ensureAccountTables(env);
+                const body: any = await request.json();
+                const phone = normalizePhone(body.phone);
+                const purpose = s(body.purpose);
+                const clientInstallId = safeText(body.clientInstallId, 128);
+                if (!isValidMainlandPhone(phone) || !['register', 'login'].includes(purpose) || !clientInstallId) {
+                    return Response.json({ error: 'Invalid SMS request', code: 'SMS_INVALID_REQUEST' }, { status: 400, headers: corsHeaders });
+                }
+                if (!env.AUTH_HASH_PEPPER || !env.ALIYUN_ACCESS_KEY_ID || !env.ALIYUN_ACCESS_KEY_SECRET ||
+                    !env.ALIYUN_SMS_SCHEME_NAME || !env.ALIYUN_SMS_SIGN_NAME || !env.ALIYUN_SMS_TEMPLATE_CODE) {
+                    return Response.json({ error: 'SMS service is not configured', code: 'SMS_NOT_CONFIGURED' }, { status: 503, headers: corsHeaders });
+                }
+                const pepper = env.AUTH_HASH_PEPPER;
+                const phoneHash = await secureHash(phone, pepper);
+                const ipHash = await secureHash(request.headers.get('CF-Connecting-IP') || 'unknown', pepper);
+                const clientHash = await secureHash(clientInstallId, pepper);
+                const account = await env.DB.prepare("SELECT id FROM accounts WHERE phone_hash = ? AND status = 'active'").bind(phoneHash).first();
+                if ((purpose === 'register' && account) || (purpose === 'login' && !account)) {
+                    return Response.json({
+                        error: purpose === 'register' ? 'Phone number is already registered' : 'Account does not exist',
+                        code: purpose === 'register' ? 'ACCOUNT_EXISTS' : 'ACCOUNT_NOT_FOUND',
+                    }, { status: 409, headers: corsHeaders });
+                }
+                const recentPhone = n(await env.DB.prepare("SELECT COUNT(*) AS c FROM sms_requests WHERE phone_hash = ? AND created_at >= datetime('now', '-60 seconds')").bind(phoneHash).first('c'));
+                const dailyPhone = n(await env.DB.prepare("SELECT COUNT(*) AS c FROM sms_requests WHERE phone_hash = ? AND created_at >= datetime('now', '-24 hours')").bind(phoneHash).first('c'));
+                const hourlyIP = n(await env.DB.prepare("SELECT COUNT(*) AS c FROM sms_requests WHERE ip_hash = ? AND created_at >= datetime('now', '-1 hour')").bind(ipHash).first('c'));
+                const hourlyClient = n(await env.DB.prepare("SELECT COUNT(*) AS c FROM sms_requests WHERE client_hash = ? AND created_at >= datetime('now', '-1 hour')").bind(clientHash).first('c'));
+                const globalTenMinutes = n(await env.DB.prepare("SELECT COUNT(*) AS c FROM sms_requests WHERE created_at >= datetime('now', '-10 minutes')").first('c'));
+                if (recentPhone >= 1 || dailyPhone >= 8 || hourlyIP >= 20 || hourlyClient >= 8 || globalTenMinutes >= 300) {
+                    return Response.json({ error: 'Too many SMS requests', code: 'SMS_RATE_LIMITED' }, { status: 429, headers: corsHeaders });
+                }
+                const challengeId = crypto.randomUUID();
+                await env.DB.prepare(`
+                    INSERT INTO sms_requests (id, phone_hash, purpose, ip_hash, client_hash, status, expires_at)
+                    VALUES (?, ?, ?, ?, ?, 'pending', ?)
+                `).bind(challengeId, phoneHash, purpose, ipHash, clientHash, isoAfterSeconds(300)).run();
+                try {
+                    const sent = await callAliyunDypns(env, 'SendSmsVerifyCode', {
+                        SchemeName: env.ALIYUN_SMS_SCHEME_NAME,
+                        CountryCode: '86',
+                        PhoneNumber: phone,
+                        SignName: env.ALIYUN_SMS_SIGN_NAME,
+                        TemplateCode: env.ALIYUN_SMS_TEMPLATE_CODE,
+                        TemplateParam: env.ALIYUN_SMS_TEMPLATE_PARAM || '{"code":"##code##","min":"5"}',
+                        OutId: challengeId,
+                        CodeLength: '6',
+                        ValidTime: '300',
+                        DuplicatePolicy: '1',
+                        Interval: '60',
+                        CodeType: '1',
+                        ReturnVerifyCode: 'false',
+                    });
+                    await env.DB.prepare("UPDATE sms_requests SET status = 'sent', provider_request_id = ? WHERE id = ?")
+                        .bind(s(sent?.RequestId), challengeId).run();
+                    return Response.json({ challengeId, cooldownSeconds: 60, expiresInSeconds: 300 }, { headers: corsHeaders });
+                } catch (error) {
+                    await env.DB.prepare("UPDATE sms_requests SET status = 'failed' WHERE id = ?").bind(challengeId).run();
+                    console.error('SMS send failed', { challengeId, reason: s((error as any)?.message) });
+                    return Response.json({ error: 'SMS service is temporarily unavailable', code: 'SMS_UPSTREAM_FAILED' }, { status: 502, headers: corsHeaders });
+                }
+            }
+
+            if ((path === "/api/auth/register" || path === "/api/auth/login") && method === "POST") {
+                await ensureAccountTables(env);
+                const body: any = await request.json();
+                const purpose = path.endsWith('/register') ? 'register' : 'login';
+                const phone = normalizePhone(body.phone);
+                const code = cleanText(body.code);
+                const challengeId = safeText(body.challengeId, 128);
+                if (!isValidMainlandPhone(phone) || !/^\d{4,6}$/.test(code) || !challengeId) {
+                    return Response.json({ error: 'Invalid verification request', code: 'SMS_INVALID_REQUEST' }, { status: 400, headers: corsHeaders });
+                }
+                if (!env.AUTH_HASH_PEPPER) {
+                    return Response.json({ error: 'Authentication service is not configured', code: 'AUTH_NOT_CONFIGURED' }, { status: 503, headers: corsHeaders });
+                }
+                const nickname = cleanText(body.nickname);
+                const password = s(body.password);
+                if (purpose === 'register' && (!body.agreedToTerms || nickname.length < 2 || nickname.length > 12 ||
+                    containsUnsafeText(nickname) || password.length < 6 || password.length > 20)) {
+                    return Response.json({ error: 'Invalid registration fields', code: 'REGISTER_INVALID_FIELDS' }, { status: 400, headers: corsHeaders });
+                }
+                let verified = false;
+                try {
+                    verified = await verifySMSChallenge(env, challengeId, phone, purpose, code);
+                } catch (error) {
+                    console.error('SMS verification failed', { challengeId, reason: s((error as any)?.message) });
+                    return Response.json({ error: 'SMS verification service is temporarily unavailable', code: 'SMS_UPSTREAM_FAILED' }, { status: 502, headers: corsHeaders });
+                }
+                if (!verified) {
+                    return Response.json({ error: 'Verification code is incorrect or expired', code: 'SMS_CODE_INVALID' }, { status: 400, headers: corsHeaders });
+                }
+                const phoneHash = await secureHash(phone, env.AUTH_HASH_PEPPER);
+                let account: any;
+                if (purpose === 'register') {
+                    if (await env.DB.prepare('SELECT id FROM accounts WHERE phone_hash = ?').bind(phoneHash).first()) {
+                        return Response.json({ error: 'Phone number is already registered', code: 'ACCOUNT_EXISTS' }, { status: 409, headers: corsHeaders });
+                    }
+                    const userId = crypto.randomUUID();
+                    const salt = randomToken().slice(0, 32);
+                    await env.DB.prepare(`
+                        INSERT INTO accounts (id, phone_hash, phone_mask, nickname, bio, avatar_url, password_hash, password_salt, accepted_terms_at)
+                        VALUES (?, ?, ?, ?, '', 'logo', ?, ?, CURRENT_TIMESTAMP)
+                    `).bind(userId, phoneHash, maskPhone(phone), nickname, await hashPassword(password, salt), salt).run();
+                    await transferLegacyIdentity(env, userId, body.legacyUserId, body.legacyInstallToken);
+                    account = await getAccount(env, userId);
+                } else {
+                    account = await env.DB.prepare("SELECT * FROM accounts WHERE phone_hash = ? AND status = 'active'").bind(phoneHash).first();
+                    if (!account) return Response.json({ error: 'Account does not exist', code: 'ACCOUNT_NOT_FOUND' }, { status: 404, headers: corsHeaders });
+                }
+                const token = await createAccountSession(env, s(account.id));
+                return Response.json({ token, profile: accountProfile(await getAccount(env, s(account.id))) }, { headers: corsHeaders });
+            }
+
+            // 2. Legacy anonymous device auth. Retained temporarily for older app builds.
             if (path === "/api/auth/device" && method === "POST") {
                 const body: any = await request.json();
                 if (!isTextWithin(body.anonymousUserId, 128) || !isTextWithin(body.installToken, 128)) {
@@ -482,7 +850,7 @@ export default {
                 return Response.json({ success: true }, { headers: corsHeaders });
             }
 
-            // 2. Templates Feed & Trending
+            // 3. Templates Feed & Trending
             if (path === "/api/templates" && method === "GET") {
                 const { results } = await env.DB.prepare(`
                     SELECT t.*, ts.view_count, ts.start_count, ts.generate_count, ts.usage_count, ts.share_count, ts.like_count, ts.report_count
@@ -573,6 +941,55 @@ export default {
                 return Response.json({ error: "Unauthorized" }, { status: 401, headers: corsHeaders });
             }
             const safeUserId = s(userId);
+
+            // ---- PROTECTED ACCOUNT ENDPOINTS ----
+            if (path === "/api/auth/me" && method === "GET") {
+                const account = await getAccount(env, safeUserId);
+                if (!account) return Response.json({ error: 'Account login required', code: 'ACCOUNT_LOGIN_REQUIRED' }, { status: 401, headers: corsHeaders });
+                return Response.json({ profile: accountProfile(account) }, { headers: corsHeaders });
+            }
+
+            if (path === "/api/auth/logout" && method === "POST") {
+                const authHeader = request.headers.get('Authorization');
+                if (authHeader?.startsWith('Bearer ')) {
+                    await env.DB.prepare('UPDATE account_sessions SET revoked_at = CURRENT_TIMESTAMP WHERE token_hash = ?')
+                        .bind(await hashToken(authHeader.slice(7))).run();
+                }
+                return Response.json({ success: true }, { headers: corsHeaders });
+            }
+
+            if (path === "/api/account/profile" && method === "PUT") {
+                const account = await getAccount(env, safeUserId);
+                if (!account) return Response.json({ error: 'Account login required', code: 'ACCOUNT_LOGIN_REQUIRED' }, { status: 401, headers: corsHeaders });
+                const body: any = await request.json();
+                const nickname = cleanText(body.nickname);
+                const bio = cleanText(body.bio);
+                const avatar = cleanText(body.avatar);
+                if (nickname.length < 2 || nickname.length > 12 || bio.length > 80 ||
+                    containsUnsafeText(nickname) || containsUnsafeText(bio) || !isAllowedAvatar(avatar)) {
+                    return Response.json({ error: 'Invalid profile fields', code: 'PROFILE_INVALID_FIELDS' }, { status: 400, headers: corsHeaders });
+                }
+                await env.DB.batch([
+                    env.DB.prepare('UPDATE accounts SET nickname = ?, bio = ?, avatar_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+                        .bind(nickname, bio, avatar, safeUserId),
+                    env.DB.prepare('UPDATE templates SET author_name = ? WHERE author_id = ?').bind(nickname, safeUserId),
+                    env.DB.prepare('UPDATE works SET author_name = ?, author_avatar = ? WHERE author_id = ?').bind(nickname, avatar, safeUserId),
+                ]);
+                return Response.json({ profile: accountProfile(await getAccount(env, safeUserId)) }, { headers: corsHeaders });
+            }
+
+            if (path === "/api/account" && method === "DELETE") {
+                const account = await getAccount(env, safeUserId);
+                if (!account) return Response.json({ error: 'Account login required', code: 'ACCOUNT_LOGIN_REQUIRED' }, { status: 401, headers: corsHeaders });
+                await env.DB.batch([
+                    env.DB.prepare("UPDATE accounts SET status = 'deleted', phone_hash = ?, phone_mask = '', nickname = '已注销用户', bio = '', avatar_url = 'logo', password_hash = ?, password_salt = ?, vip_until = NULL, vip_plan = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+                        .bind(`deleted:${safeUserId}:${Date.now()}`, randomToken(), randomToken(), safeUserId),
+                    env.DB.prepare('UPDATE account_sessions SET revoked_at = CURRENT_TIMESTAMP WHERE user_id = ?').bind(safeUserId),
+                    env.DB.prepare("UPDATE templates SET status = 'hidden', author_name = '已注销用户' WHERE author_id = ?").bind(safeUserId),
+                    env.DB.prepare("UPDATE works SET author_name = '已注销用户', author_avatar = 'logo' WHERE author_id = ?").bind(safeUserId),
+                ]);
+                return Response.json({ success: true }, { headers: corsHeaders });
+            }
 
             // ---- PROTECTED AI ENDPOINTS ----
             if (path === "/api/ai/status" && method === "GET") {
@@ -777,6 +1194,7 @@ stats 为 2 到 4 个短指标名称；evidencePool 为至少 3 条轻松证据�
                         }, { status: 400, headers: corsHeaders });
                     }
 
+                    const author = await getAuthorProfile(env, safeUserId, body.authorName);
                     await env.DB.prepare(`
                         INSERT INTO templates (id, title, description, cover_image, category, author_id, author_name, status, form_config_raw, result_config_raw)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -787,7 +1205,7 @@ stats 为 2 到 4 个短指标名称；evidencePool 为至少 3 条轻松证据�
                         s(body.coverImage),
                         s(body.category),
                         safeUserId,
-                        s(body.authorName),
+                        author.nickname,
                         isAllowedTemplateStatus(body.status) ? s(body.status) : 'draft',
                         formConfigRaw,
                         resultConfigRaw
@@ -881,12 +1299,15 @@ stats 为 2 到 4 个短指标名称；evidencePool 为至少 3 条轻松证据�
                         description: cleanText(body.description),
                         isAnonymous: body.isAnonymous ? 1 : 0,
                         authorId: safeUserId,
-                        authorName: s(body.authorName),
-                        authorAvatar: s(body.authorAvatar),
+                        authorName: '',
+                        authorAvatar: '',
                         tags: s(JSON.stringify(body.tags ?? [])),
                         category: s(body.category),
                         imageUrl: s(body.imageUrl)
                     };
+                    const author = await getAuthorProfile(env, safeUserId, body.authorName, body.authorAvatar);
+                    workData.authorName = author.nickname;
+                    workData.authorAvatar = author.avatar;
 
                     console.log("Publishing work - processed data:", JSON.stringify(workData));
 
