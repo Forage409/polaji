@@ -6,6 +6,9 @@ workflows:
     environment:
       xcode: 16.2
     scripts:
+      - name: Audit backend SQL parameterization
+        script: |
+          node backend/scripts/audit-parameterized-sql.mjs
       - name: Generate Xcode Project
         script: |
           brew install xcodegen
@@ -80,6 +83,9 @@ workflows:
     environment:
       xcode: 16.2
     scripts:
+      - name: Audit backend SQL parameterization
+        script: |
+          node backend/scripts/audit-parameterized-sql.mjs
       - name: Generate Xcode Project
         script: |
           brew install xcodegen
