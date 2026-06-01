@@ -651,7 +651,7 @@ async function verifySMSChallenge(env: Env, challengeId: string, phone: string, 
     if (!challenge || n(challenge.attempt_count) >= 5) return false;
     await env.DB.prepare('UPDATE sms_requests SET attempt_count = attempt_count + 1 WHERE id = ?').bind(challengeId).run();
     const checked = await callAliyunDypns(env, 'CheckSmsVerifyCode', {
-        SchemeName: s(env.ALIYUN_SMS_SCHEME_NAME),
+        ...(env.ALIYUN_SMS_SCHEME_NAME ? { SchemeName: env.ALIYUN_SMS_SCHEME_NAME } : {}),
         CountryCode: '86',
         PhoneNumber: phone,
         VerifyCode: code,
@@ -732,7 +732,7 @@ export default {
                     return Response.json({ error: 'Invalid SMS request', code: 'SMS_INVALID_REQUEST' }, { status: 400, headers: corsHeaders });
                 }
                 if (!env.AUTH_HASH_PEPPER || !env.ALIYUN_ACCESS_KEY_ID || !env.ALIYUN_ACCESS_KEY_SECRET ||
-                    !env.ALIYUN_SMS_SCHEME_NAME || !env.ALIYUN_SMS_SIGN_NAME || !env.ALIYUN_SMS_TEMPLATE_CODE) {
+                    !env.ALIYUN_SMS_SIGN_NAME || !env.ALIYUN_SMS_TEMPLATE_CODE) {
                     return Response.json({ error: 'SMS service is not configured', code: 'SMS_NOT_CONFIGURED' }, { status: 503, headers: corsHeaders });
                 }
                 const pepper = env.AUTH_HASH_PEPPER;
@@ -761,7 +761,7 @@ export default {
                 `).bind(challengeId, phoneHash, purpose, ipHash, clientHash, isoAfterSeconds(300)).run();
                 try {
                     const sent = await callAliyunDypns(env, 'SendSmsVerifyCode', {
-                        SchemeName: env.ALIYUN_SMS_SCHEME_NAME,
+                        ...(env.ALIYUN_SMS_SCHEME_NAME ? { SchemeName: env.ALIYUN_SMS_SCHEME_NAME } : {}),
                         CountryCode: '86',
                         PhoneNumber: phone,
                         SignName: env.ALIYUN_SMS_SIGN_NAME,
