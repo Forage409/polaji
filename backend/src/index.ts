@@ -457,7 +457,7 @@ async function hashPassword(password: string, salt: string): Promise<string> {
         name: 'PBKDF2',
         hash: 'SHA-256',
         salt: encoder.encode(salt),
-        iterations: 120000,
+        iterations: 100000,
     }, key, 256);
     return Array.from(new Uint8Array(bits)).map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
@@ -505,7 +505,7 @@ async function callAliyunDypns(env: Env, action: string, actionParameters: Recor
     const json: any = await response.json();
     if (!response.ok || s(json?.Code) !== 'OK') {
         console.error('Aliyun Dypns request failed', { action, code: s(json?.Code), requestId: s(json?.RequestId) });
-        throw new Error(`ALIYUN_SMS_FAILED:${s(json?.Code, 'UNKNOWN')}`);
+        throw new Error(`ALIYUN_SMS_FAILED:${s(json?.Code, 'UNKNOWN')}:${s(json?.Message, 'UNKNOWN')}`);
     }
     return json;
 }
@@ -655,7 +655,6 @@ async function verifySMSChallenge(env: Env, challengeId: string, phone: string, 
         CountryCode: '86',
         PhoneNumber: phone,
         VerifyCode: code,
-        OutId: challengeId,
     });
     const passed = s(checked?.Model?.VerifyResult).toUpperCase() === 'PASS';
     await env.DB.prepare("UPDATE sms_requests SET status = ? WHERE id = ?")
@@ -764,16 +763,14 @@ export default {
                         ...(env.ALIYUN_SMS_SCHEME_NAME ? { SchemeName: env.ALIYUN_SMS_SCHEME_NAME } : {}),
                         CountryCode: '86',
                         PhoneNumber: phone,
-                        SignName: env.ALIYUN_SMS_SIGN_NAME,
-                        TemplateCode: env.ALIYUN_SMS_TEMPLATE_CODE,
-                        TemplateParam: env.ALIYUN_SMS_TEMPLATE_PARAM || '{"code":"##code##","min":"5"}',
-                        OutId: challengeId,
-                        CodeLength: '6',
+                        SignName: cleanText(env.ALIYUN_SMS_SIGN_NAME),
+                        TemplateCode: cleanText(env.ALIYUN_SMS_TEMPLATE_CODE),
+                        TemplateParam: cleanText(env.ALIYUN_SMS_TEMPLATE_PARAM) || '{"code":"##code##","min":"5"}',
+                        CodeLength: '4',
                         ValidTime: '300',
                         DuplicatePolicy: '1',
                         Interval: '60',
                         CodeType: '1',
-                        ReturnVerifyCode: 'false',
                     });
                     await env.DB.prepare("UPDATE sms_requests SET status = 'sent', provider_request_id = ? WHERE id = ?")
                         .bind(s(sent?.RequestId), challengeId).run();
@@ -781,14 +778,21 @@ export default {
                 } catch (error) {
                     await env.DB.prepare("UPDATE sms_requests SET status = 'failed' WHERE id = ?").bind(challengeId).run();
                     const reason = s((error as any)?.message);
-                    const providerCode = reason.startsWith('ALIYUN_SMS_FAILED:')
-                        ? reason.slice('ALIYUN_SMS_FAILED:'.length).replace(/[^A-Za-z0-9_.-]/g, '').slice(0, 80)
+                    const providerParts = reason.startsWith('ALIYUN_SMS_FAILED:')
+                        ? reason.slice('ALIYUN_SMS_FAILED:'.length).split(':', 2)
+                        : [];
+                    const providerCode = providerParts[0]
+                        ? providerParts[0].replace(/[^A-Za-z0-9_.-]/g, '').slice(0, 80)
                         : 'UNKNOWN';
+                    const providerMessage = providerParts[1]
+                        ? providerParts[1].replace(/[^\u4e00-\u9fa5A-Za-z0-9 _.,，。;；()（）_-]/g, '').slice(0, 120)
+                        : '';
                     console.error('SMS send failed', { challengeId, providerCode });
                     return Response.json({
                         error: 'SMS service is temporarily unavailable',
                         code: 'SMS_UPSTREAM_FAILED',
                         providerCode,
+                        providerMessage,
                     }, { status: 502, headers: corsHeaders });
                 }
             }
